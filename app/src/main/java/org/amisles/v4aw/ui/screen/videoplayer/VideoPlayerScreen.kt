@@ -7,6 +7,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.TextView
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +45,51 @@ import org.amisles.v4aw.ui.theme.Slate50
 import org.amisles.v4aw.ui.theme.Slate500
 import org.amisles.v4aw.ui.theme.Slate700
 import org.amisles.v4aw.ui.theme.Slate800
+
+private fun setupPlayerViewButtons(
+    view: View,
+    uiState: VideoPlayerUiState,
+    viewModel: VideoPlayerViewModel,
+    activity: Activity?,
+    onToggleFullscreen: () -> Unit,
+    onShowSpeedDialog: () -> Unit
+) {
+    val fullscreenBtn = view.findViewById<View>(R.id.exo_fullscreen_btn)
+    val speedBtn = view.findViewById<TextView>(R.id.exo_speed_btn)
+    val pipBtn = view.findViewById<View>(R.id.exo_pip_btn)
+    
+    fullscreenBtn?.setOnClickListener { onToggleFullscreen() }
+    speedBtn?.text = formatSpeedText(uiState.playbackSpeed)
+    speedBtn?.setOnClickListener { onShowSpeedDialog() }
+    
+    pipBtn?.visibility = if (uiState.isPictureInPictureSupported && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        View.VISIBLE
+    } else {
+        View.GONE
+    }
+    pipBtn?.setOnClickListener {
+        activity?.let { act ->
+            if (uiState.player != null) {
+                viewModel.enterPictureInPictureMode(act)
+            }
+        }
+    }
+}
+
+private fun updatePlayerViewSpeed(
+    view: View,
+    uiState: VideoPlayerUiState
+) {
+    val speedBtn = view.findViewById<TextView>(R.id.exo_speed_btn)
+    speedBtn?.text = formatSpeedText(uiState.playbackSpeed)
+    
+    val pipBtn = view.findViewById<View>(R.id.exo_pip_btn)
+    pipBtn?.visibility = if (uiState.isPictureInPictureSupported && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        View.VISIBLE
+    } else {
+        View.GONE
+    }
+}
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,7 +125,14 @@ fun VideoPlayerScreen(
     }
 
     DisposableEffect(Unit) {
+        val mainActivity = activity as? org.amisles.v4aw.MainActivity
+        val listener: (Boolean) -> Unit = { isInPip ->
+            viewModel.onPictureInPictureModeChanged(isInPip)
+        }
+        mainActivity?.setPictureInPictureModeChangedListener(listener)
+        
         onDispose {
+            mainActivity?.clearPictureInPictureModeChangedListener()
             viewModel.releasePlayer()
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             exitFullscreen(activity)
@@ -93,37 +147,46 @@ fun VideoPlayerScreen(
         }
     }
 
-    if (uiState.isFullscreen && uiState.player != null) {
-        FullscreenPlayerView(
-            viewModel = viewModel,
-            uiState = uiState,
-            onToggleFullscreen = { viewModel.toggleFullscreen() },
-            onShowSpeedDialog = { showSpeedDialog = true },
-            onPlayerViewCreated = { playerViewRef = it },
-            onTap = {
-                playerViewRef?.let { pv ->
-                    if (pv.isControllerFullyVisible) pv.hideController() else pv.showController()
+    when {
+        uiState.isInPictureInPicture && uiState.player != null -> {
+            PipPlayerView(
+                uiState = uiState,
+                onPlayerViewCreated = { playerViewRef = it }
+            )
+        }
+        uiState.isFullscreen && uiState.player != null -> {
+            FullscreenPlayerView(
+                viewModel = viewModel,
+                uiState = uiState,
+                onToggleFullscreen = { viewModel.toggleFullscreen() },
+                onShowSpeedDialog = { showSpeedDialog = true },
+                onPlayerViewCreated = { playerViewRef = it },
+                onTap = {
+                    playerViewRef?.let { pv ->
+                        if (pv.isControllerFullyVisible) pv.hideController() else pv.showController()
+                    }
                 }
-            }
-        )
-    } else {
-        NormalPlayerView(
-            viewModel = viewModel,
-            uiState = uiState,
-            videoInfo = videoInfo,
-            onNavigateBack = handleNavigateBack,
-            onToggleFullscreen = { viewModel.toggleFullscreen() },
-            onParseVideoEntry = { viewModel.parseVideoEntry(it) },
-            onPlayVideo = { viewModel.playVideo(it) },
-            onShowDownloadDialog = { showDownloadDialog = true },
-            onShowSpeedDialog = { showSpeedDialog = true },
-            onPlayerViewCreated = { playerViewRef = it },
-            onTap = {
-                playerViewRef?.let { pv ->
-                    if (pv.isControllerFullyVisible) pv.hideController() else pv.showController()
+            )
+        }
+        else -> {
+            NormalPlayerView(
+                viewModel = viewModel,
+                uiState = uiState,
+                videoInfo = videoInfo,
+                onNavigateBack = handleNavigateBack,
+                onToggleFullscreen = { viewModel.toggleFullscreen() },
+                onParseVideoEntry = { viewModel.parseVideoEntry(it) },
+                onPlayVideo = { viewModel.playVideo(it) },
+                onShowDownloadDialog = { showDownloadDialog = true },
+                onShowSpeedDialog = { showSpeedDialog = true },
+                onPlayerViewCreated = { playerViewRef = it },
+                onTap = {
+                    playerViewRef?.let { pv ->
+                        if (pv.isControllerFullyVisible) pv.hideController() else pv.showController()
+                    }
                 }
-            }
-        )
+            )
+        }
     }
 
     if (showDownloadDialog) {
@@ -322,12 +385,19 @@ private fun FullscreenPlayerView(
 ) {
     var isControllerVisible by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    val context = LocalContext.current
+    val activity = context as? Activity
 
     LaunchedEffect(playerViewRef) {
         val pv = playerViewRef ?: return@LaunchedEffect
+        isControllerVisible = pv.isControllerFullyVisible
         while (true) {
-            isControllerVisible = pv.isControllerFullyVisible
-            kotlinx.coroutines.delay(100)
+            val currentVisible = pv.isControllerFullyVisible
+            if (isControllerVisible != currentVisible) {
+                isControllerVisible = currentVisible
+            }
+            val delayMs = if (isControllerVisible) 100L else 500L
+            kotlinx.coroutines.delay(delayMs)
         }
     }
 
@@ -340,29 +410,32 @@ private fun FullscreenPlayerView(
             .background(androidx.compose.ui.graphics.Color.Black)
     ) {
         AndroidView(
-            factory = { ctx ->
-                LayoutInflater.from(ctx).inflate(R.layout.custom_player_view, null, false).also { view ->
-                    val playerView = view.findViewById<PlayerView>(R.id.player_view)
-                    playerView.player = uiState.player
-                    playerView.useController = true
-                    playerView.controllerShowTimeoutMs = 3000
-                    playerView.showController()
-                    playerView.setKeepContentOnPlayerReset(true)
-                    playerViewRef = playerView
-                    onPlayerViewCreated(playerView)
-                    val fullscreenBtn = view.findViewById<View>(R.id.exo_fullscreen_btn)
-                    fullscreenBtn?.setOnClickListener { onToggleFullscreen() }
-                    val speedBtn = view.findViewById<TextView>(R.id.exo_speed_btn)
-                    speedBtn?.text = formatSpeedText(uiState.playbackSpeed)
-                    speedBtn?.setOnClickListener { onShowSpeedDialog() }
-                } as View
-            },
-            update = { view ->
-                val speedBtn = view.findViewById<TextView>(R.id.exo_speed_btn)
-                speedBtn?.text = formatSpeedText(uiState.playbackSpeed)
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+        factory = { ctx ->
+            LayoutInflater.from(ctx).inflate(R.layout.custom_player_view, null, false).also { view ->
+                val playerView = view.findViewById<PlayerView>(R.id.player_view)
+                playerView.player = uiState.player
+                playerView.useController = true
+                playerView.controllerShowTimeoutMs = 3000
+                playerView.showController()
+                playerView.setKeepContentOnPlayerReset(true)
+                playerViewRef = playerView
+                onPlayerViewCreated(playerView)
+                
+                setupPlayerViewButtons(
+                    view = view,
+                    uiState = uiState,
+                    viewModel = viewModel,
+                    activity = activity,
+                    onToggleFullscreen = onToggleFullscreen,
+                    onShowSpeedDialog = onShowSpeedDialog
+                )
+            } as View
+        },
+        update = { view ->
+            updatePlayerViewSpeed(view, uiState)
+        },
+        modifier = Modifier.fillMaxSize()
+    )
     }
 }
 
@@ -392,9 +465,14 @@ private fun NormalPlayerView(
 
     LaunchedEffect(localPlayerViewRef) {
         val pv = localPlayerViewRef ?: return@LaunchedEffect
+        isControllerVisible = pv.isControllerFullyVisible
         while (true) {
-            isControllerVisible = pv.isControllerFullyVisible
-            kotlinx.coroutines.delay(100)
+            val currentVisible = pv.isControllerFullyVisible
+            if (isControllerVisible != currentVisible) {
+                isControllerVisible = currentVisible
+            }
+            val delayMs = if (isControllerVisible) 100L else 500L
+            kotlinx.coroutines.delay(delayMs)
         }
     }
     
@@ -424,6 +502,27 @@ private fun NormalPlayerView(
                 color = Slate800
             )
             Spacer(modifier = Modifier.weight(1f))
+            
+            if (uiState.isPictureInPictureSupported && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val context = LocalContext.current
+                val activity = context as? Activity
+                IconButton(
+                    onClick = {
+                        activity?.let { act ->
+                            if (uiState.player != null) {
+                                viewModel.enterPictureInPictureMode(act)
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.PictureInPicture,
+                        contentDescription = strings.pictureInPicture,
+                        tint = Slate800
+                    )
+                }
+            }
+            
             if (!isLocalVideo) {
                 IconButton(onClick = onShowDownloadDialog) {
                     Icon(
@@ -475,11 +574,15 @@ private fun NormalPlayerView(
                                 playerView.setKeepContentOnPlayerReset(true)
                                 localPlayerViewRef = playerView
                                 onPlayerViewCreated(playerView)
+                                
                                 val fullscreenBtn = view.findViewById<View>(R.id.exo_fullscreen_btn)
                                 fullscreenBtn?.setOnClickListener { onToggleFullscreen() }
                                 val speedBtn = view.findViewById<TextView>(R.id.exo_speed_btn)
                                 speedBtn?.text = formatSpeedText(uiState.playbackSpeed)
                                 speedBtn?.setOnClickListener { onShowSpeedDialog() }
+                                
+                                val pipBtn = view.findViewById<View>(R.id.exo_pip_btn)
+                                pipBtn?.visibility = View.GONE
                             } as View
                         },
                         update = { view ->
@@ -615,14 +718,14 @@ private fun enterFullscreen(activity: Activity?) {
 private fun exitFullscreen(activity: Activity?) {
     activity?.window?.let { window ->
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(true)
+            window.setDecorFitsSystemWindows(false)
             window.insetsController?.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
         } else {
             @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
         }
     }
-    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 }
 
 @Composable
@@ -743,5 +846,33 @@ private fun PlaybackSpeedDialog(
                 Text(strings.cancel)
             }
         }
+    )
+}
+
+@Composable
+private fun PipPlayerView(
+    uiState: VideoPlayerUiState,
+    onPlayerViewCreated: (PlayerView) -> Unit
+) {
+    AndroidView(
+        factory = { context ->
+            LayoutInflater.from(context).inflate(R.layout.custom_player_view, null, false).also { view ->
+                val playerView = view.findViewById<PlayerView>(R.id.player_view)
+                playerView.player = uiState.player
+                playerView.useController = false
+                playerView.setKeepContentOnPlayerReset(true)
+                onPlayerViewCreated(playerView)
+                
+                val fullscreenBtn = view.findViewById<View>(R.id.exo_fullscreen_btn)
+                val speedBtn = view.findViewById<View>(R.id.exo_speed_btn)
+                val pipBtn = view.findViewById<View>(R.id.exo_pip_btn)
+                fullscreenBtn?.visibility = View.GONE
+                speedBtn?.visibility = View.GONE
+                pipBtn?.visibility = View.GONE
+            } as View
+        },
+        modifier = Modifier
+            .fillMaxSize()
+            .background(androidx.compose.ui.graphics.Color.Black)
     )
 }

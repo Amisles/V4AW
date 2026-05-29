@@ -1,5 +1,6 @@
 package org.amisles.v4aw.ui.screen.videoplayer
 
+import android.app.Activity
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -28,6 +29,7 @@ import org.amisles.v4aw.domain.usecase.GetVideoSourceUseCase
 import org.amisles.v4aw.domain.usecase.ParseVideoUrlUseCase
 import org.amisles.v4aw.model.ParseResult
 import org.amisles.v4aw.i18n.Strings
+import org.amisles.v4aw.player.PictureInPictureManager
 import javax.inject.Inject
 
 data class VideoPlayerUiState(
@@ -37,7 +39,9 @@ data class VideoPlayerUiState(
     val availableSources: List<String> = emptyList(),
     val isLoading: Boolean = false,
     val isFullscreen: Boolean = false,
-    val playbackSpeed: Float = 1.0f
+    val playbackSpeed: Float = 1.0f,
+    val isPictureInPictureSupported: Boolean = false,
+    val isInPictureInPicture: Boolean = false
 )
 
 @UnstableApi
@@ -45,7 +49,8 @@ data class VideoPlayerUiState(
 class VideoPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val getVideoSourceUseCase: GetVideoSourceUseCase,
-    private val parseVideoUrlUseCase: ParseVideoUrlUseCase
+    private val parseVideoUrlUseCase: ParseVideoUrlUseCase,
+    private val pipManager: PictureInPictureManager
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(VideoPlayerUiState())
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.asStateFlow()
@@ -54,6 +59,12 @@ class VideoPlayerViewModel @Inject constructor(
     private var playerListener: Player.Listener? = null
     private var currentUrl: String? = null
     private var isReleasing = false
+    
+    init {
+        _uiState.value = _uiState.value.copy(
+            isPictureInPictureSupported = pipManager.isPictureInPictureSupported()
+        )
+    }
     
     private val httpDataSourceFactory: HttpDataSource.Factory = DefaultHttpDataSource.Factory()
         .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -140,6 +151,7 @@ class VideoPlayerViewModel @Inject constructor(
                     }
                     newPlayer.addListener(playerListener!!)
                     player = newPlayer
+                    pipManager.setPlayer(newPlayer)
                 }
         }
 
@@ -254,14 +266,31 @@ class VideoPlayerViewModel @Inject constructor(
                     playerListener = null
                 }
             } catch (e: Exception) {
+                e.printStackTrace()
             }
             try {
                 currentPlayer.release()
             } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
         player = null
+        pipManager.clearPlayer()
         isReleasing = false
+    }
+    
+    fun onPictureInPictureModeChanged(isInPictureInPicture: Boolean) {
+        pipManager.onPictureInPictureModeChanged(isInPictureInPicture)
+        _uiState.value = _uiState.value.copy(
+            isInPictureInPicture = isInPictureInPicture,
+            isFullscreen = if (isInPictureInPicture) false else _uiState.value.isFullscreen
+        )
+    }
+    
+    fun enterPictureInPictureMode(activity: Activity): Boolean {
+        val currentPlayer = player ?: return false
+        pipManager.setPlayer(currentPlayer)
+        return pipManager.enterPictureInPictureMode(activity)
     }
     
     override fun onCleared() {

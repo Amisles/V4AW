@@ -129,6 +129,10 @@ object StringKey {
     const val STREAMING_FORMAT_DOWNLOAD_ERROR = "streaming_format_download_error"
 
     const val PLAYBACK_SPEED = "playback_speed"
+    
+    const val PICTURE_IN_PICTURE = "picture_in_picture"
+    const val PIP_NOT_SUPPORTED = "pip_not_supported"
+    const val PIP_ENTER = "pip_enter"
 
     const val SEARCH_HISTORY = "search_history"
     const val TODAY = "today"

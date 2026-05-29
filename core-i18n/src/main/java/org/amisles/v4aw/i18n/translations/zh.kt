@@ -130,6 +130,10 @@ val zhStrings: Map<String, String> = mapOf(
     "streaming_format_download_error" to "该视频源是流式播放格式（m3u8/mpd），暂不支持直接下载。请选择mp4/webm等直接视频源。",
 
     "playback_speed" to "播放速度",
+    
+    "picture_in_picture" to "画中画",
+    "pip_not_supported" to "此设备不支持画中画功能",
+    "pip_enter" to "进入画中画模式",
 
     "search_history" to "搜索历史记录",
     "today" to "今天",

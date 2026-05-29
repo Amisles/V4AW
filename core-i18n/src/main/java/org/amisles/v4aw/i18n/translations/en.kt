@@ -130,6 +130,10 @@ val enStrings: Map<String, String> = mapOf(
     "streaming_format_download_error" to "This video source uses a streaming format (m3u8/mpd) which is not supported for direct download. Please select a direct video source such as mp4/webm.",
 
     "playback_speed" to "Playback Speed",
+    
+    "picture_in_picture" to "Picture in Picture",
+    "pip_not_supported" to "Picture in Picture is not supported on this device",
+    "pip_enter" to "Enter Picture in Picture Mode",
 
     "search_history" to "Search history",
     "today" to "Today",

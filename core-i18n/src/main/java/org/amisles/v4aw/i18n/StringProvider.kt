@@ -132,6 +132,10 @@ interface StringProvider {
     val streamingFormatDownloadError get() = get(StringKey.STREAMING_FORMAT_DOWNLOAD_ERROR)
 
     val playbackSpeed get() = get(StringKey.PLAYBACK_SPEED)
+    
+    val pictureInPicture get() = get(StringKey.PICTURE_IN_PICTURE)
+    val pipNotSupported get() = get(StringKey.PIP_NOT_SUPPORTED)
+    val pipEnter get() = get(StringKey.PIP_ENTER)
 
     val searchHistory get() = get(StringKey.SEARCH_HISTORY)
     val today get() = get(StringKey.TODAY)

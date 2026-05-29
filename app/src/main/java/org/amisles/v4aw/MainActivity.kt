@@ -1,5 +1,6 @@
 package org.amisles.v4aw
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,6 +17,17 @@ import org.amisles.v4aw.ui.theme.V4awTheme
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    
+    private var pipModeChangedListener: ((Boolean) -> Unit)? = null
+    
+    fun setPictureInPictureModeChangedListener(listener: (Boolean) -> Unit) {
+        pipModeChangedListener = listener
+    }
+    
+    fun clearPictureInPictureModeChangedListener() {
+        pipModeChangedListener = null
+    }
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -32,5 +44,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+    
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        pipModeChangedListener?.invoke(isInPictureInPictureMode)
     }
 }
