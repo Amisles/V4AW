@@ -148,4 +148,13 @@ object StringKey {
     const val AB_LOOP_B_SET = "ab_loop_b_set"
     const val AB_LOOP_A_NOT_SET = "ab_loop_a_not_set"
     const val AB_LOOP_B_NOT_SET = "ab_loop_b_not_set"
+
+    const val MULTI_THREAD_DOWNLOAD = "multi_thread_download"
+    const val THREAD_COUNT = "thread_count"
+    const val SINGLE_THREAD_DOWNLOAD = "single_thread_download"
+    const val DOWNLOAD_VERIFYING = "download_verifying"
+    const val DOWNLOAD_MERGING = "download_merging"
+    const val DOWNLOAD_CHUNK_RETRY = "download_chunk_retry"
+    const val DOWNLOAD_INTEGRITY_FAILED = "download_integrity_failed"
+    const val DOWNLOAD_RANGE_NOT_SUPPORTED = "download_range_not_supported"
 }

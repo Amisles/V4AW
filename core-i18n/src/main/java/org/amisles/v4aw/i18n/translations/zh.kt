@@ -149,4 +149,13 @@ val zhStrings: Map<String, String> = mapOf(
     "ab_loop_b_set" to "B: %s",
     "ab_loop_a_not_set" to "A: --:--",
     "ab_loop_b_not_set" to "B: --:--",
+
+    "multi_thread_download" to "多线程下载",
+    "thread_count" to "%d 线程",
+    "single_thread_download" to "单线程",
+    "download_verifying" to "正在校验文件完整性...",
+    "download_merging" to "正在合并文件分块...",
+    "download_chunk_retry" to "分块 %d 重试中 (%d/%d)...",
+    "download_integrity_failed" to "文件完整性校验失败",
+    "download_range_not_supported" to "服务器不支持多线程下载，使用单线程下载",
 )

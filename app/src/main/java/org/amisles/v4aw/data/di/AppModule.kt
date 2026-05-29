@@ -7,6 +7,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
+import org.amisles.v4aw.download.DownloadChunkDao
 import org.amisles.v4aw.download.DownloadDao
 import org.amisles.v4aw.data.local.database.AppDatabase
 import org.amisles.v4aw.data.local.dao.HistoryDao
@@ -47,6 +48,12 @@ object AppModule {
     @Singleton
     fun provideDownloadDao(database: AppDatabase): DownloadDao {
         return database.downloadDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideDownloadChunkDao(database: AppDatabase): DownloadChunkDao {
+        return database.downloadChunkDao()
     }
 
     @Provides

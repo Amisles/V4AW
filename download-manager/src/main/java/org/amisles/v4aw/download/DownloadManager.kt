@@ -1,15 +1,20 @@
 package org.amisles.v4aw.download
 
 import android.content.Context
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
-import java.io.FileOutputStream
+import java.io.RandomAccessFile
+import java.net.HttpURLConnection
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import org.amisles.v4aw.model.DownloadChunkInfo
 import org.amisles.v4aw.model.DownloadInfo
 import org.amisles.v4aw.model.DownloadStatus
 import javax.inject.Inject
@@ -18,16 +23,18 @@ import javax.inject.Singleton
 @Singleton
 class DownloadManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val downloadDao: DownloadDao
+    private val downloadDao: DownloadDao,
+    private val chunkDao: DownloadChunkDao
 ) {
     companion object {
+        private const val TAG = "DownloadManager"
         private const val BUFFER_SIZE = 8192
         private const val SPEED_UPDATE_INTERVAL = 500L
-
-        private val VALID_VIDEO_CONTENT_TYPES = setOf(
-            "video/mp4", "video/webm", "video/x-flv", "video/quicktime",
-            "video/mp2t", "video/x-m4v", "application/x-mpegURL"
-        )
+        private const val MAX_THREAD_COUNT = 4
+        private const val MIN_CHUNK_SIZE = 1024 * 1024L
+        private const val MAX_RETRIES = 3
+        private const val RETRY_DELAY_MS = 2000L
+        private const val FILE_SIZE_THRESHOLD_FOR_MULTI_THREAD = 2 * 1024 * 1024L
 
         private val STREAMING_EXTENSIONS = setOf(".m3u8", ".mpd")
     }
@@ -41,6 +48,8 @@ class DownloadManager @Inject constructor(
         .build()
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val downloadDispatcher = Dispatchers.IO.limitedParallelism(MAX_THREAD_COUNT)
     private val activeDownloads = ConcurrentHashMap<String, DownloadJob>()
 
     private val _downloadProgress = MutableStateFlow<Map<String, DownloadInfo>>(emptyMap())
@@ -105,9 +114,9 @@ class DownloadManager @Inject constructor(
                 client = client,
                 context = context,
                 downloadDao = downloadDao,
-                onProgress = { info ->
-                    updateProgress(info)
-                }
+                chunkDao = chunkDao,
+                dispatcher = downloadDispatcher,
+                onProgress = { info -> updateProgress(info) }
             )
 
             activeDownloads[id] = job
@@ -137,9 +146,9 @@ class DownloadManager @Inject constructor(
                 client = client,
                 context = context,
                 downloadDao = downloadDao,
-                onProgress = { info ->
-                    updateProgress(info)
-                }
+                chunkDao = chunkDao,
+                dispatcher = downloadDispatcher,
+                onProgress = { info -> updateProgress(info) }
             )
 
             activeDownloads[id] = job
@@ -159,9 +168,8 @@ class DownloadManager @Inject constructor(
             )
             downloadDao.updateTask(updatedTask)
 
-            task.filePath?.let { path ->
-                File(path).delete()
-            }
+            task.filePath?.let { path -> File(path).delete() }
+            chunkDao.deleteChunksByDownloadId(id)
         }
     }
 
@@ -173,11 +181,10 @@ class DownloadManager @Inject constructor(
             val task = downloadDao.getTaskById(id)
             if (task != null) {
                 if (deleteFile) {
-                    task.filePath?.let { path ->
-                        File(path).delete()
-                    }
+                    task.filePath?.let { path -> File(path).delete() }
                 }
                 downloadDao.deleteTaskById(id)
+                chunkDao.deleteChunksByDownloadId(id)
             }
         }
     }
@@ -212,18 +219,22 @@ class DownloadManager @Inject constructor(
         private val client: OkHttpClient,
         private val context: Context,
         private val downloadDao: DownloadDao,
+        private val chunkDao: DownloadChunkDao,
+        private val dispatcher: CoroutineDispatcher,
         private val onProgress: (DownloadInfo) -> Unit
     ) {
-        private var isPaused = false
-        private var isCancelled = false
-        private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        private val isPaused = AtomicBoolean(false)
+        private val isCancelled = AtomicBoolean(false)
+        private val jobScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        private val totalDownloadedBytes = AtomicLong(0L)
 
         suspend fun start() {
             try {
                 val fileInfo = getFileInfo(task.videoSource)
+                val supportsRange = fileInfo.acceptRanges && fileInfo.size > 0
 
                 if (fileInfo.size > 0) {
-                    task = task.copy(fileSize = fileInfo.size)
+                    task = task.copy(fileSize = fileInfo.size, supportsRange = supportsRange)
                 }
 
                 val downloadDir = getDownloadDirectory()
@@ -233,9 +244,13 @@ class DownloadManager @Inject constructor(
                     task = task.copy(filePath = file.absolutePath)
                 }
 
-                downloadSingleThread(file)
+                if (supportsRange && fileInfo.size >= FILE_SIZE_THRESHOLD_FOR_MULTI_THREAD) {
+                    downloadMultiThread(file, fileInfo.size)
+                } else {
+                    downloadSingleThread(file)
+                }
 
-                if (!isCancelled) {
+                if (!isCancelled.get()) {
                     val downloadedFile = File(task.filePath ?: "")
                     val actualSize = downloadedFile.length()
 
@@ -249,9 +264,11 @@ class DownloadManager @Inject constructor(
                         updatedAt = System.currentTimeMillis()
                     )
                     onProgress(task)
+                    chunkDao.deleteChunksByDownloadId(task.id)
                 }
             } catch (e: Exception) {
-                if (!isCancelled) {
+                if (!isCancelled.get()) {
+                    Log.e(TAG, "Download failed: ${task.id}", e)
                     task = task.copy(
                         status = DownloadStatus.FAILED,
                         errorMessage = e.message ?: "Unknown download error",
@@ -263,8 +280,8 @@ class DownloadManager @Inject constructor(
         }
 
         fun pause() {
-            isPaused = true
-            scope.cancel()
+            isPaused.set(true)
+            jobScope.cancel()
             task = task.copy(
                 status = DownloadStatus.PAUSED,
                 updatedAt = System.currentTimeMillis()
@@ -273,13 +290,14 @@ class DownloadManager @Inject constructor(
         }
 
         fun cancel() {
-            isCancelled = true
-            scope.cancel()
+            isCancelled.set(true)
+            jobScope.cancel()
         }
 
         private data class FileInfo(
             val size: Long,
-            val contentType: String?
+            val contentType: String?,
+            val acceptRanges: Boolean
         )
 
         private suspend fun getFileInfo(url: String): FileInfo {
@@ -294,12 +312,204 @@ class DownloadManager @Inject constructor(
 
                     val contentLength = response.header("Content-Length")?.toLongOrNull() ?: 0L
                     val contentType = response.header("Content-Type")
+                    val acceptRanges = response.header("Accept-Ranges")?.equals("bytes", ignoreCase = true) == true
 
                     response.close()
-                    FileInfo(contentLength, contentType)
+                    FileInfo(contentLength, contentType, acceptRanges)
                 } catch (e: Exception) {
-                    FileInfo(0, null)
+                    FileInfo(0, null, false)
                 }
+            }
+        }
+
+        private suspend fun downloadMultiThread(file: File, fileSize: Long) {
+            val threadCount = calculateThreadCount(fileSize)
+            val chunkSize = fileSize / threadCount
+            val chunks = mutableListOf<DownloadChunkInfo>()
+
+            val existingChunks = chunkDao.getChunksByDownloadId(task.id)
+            val isResuming = existingChunks.isNotEmpty()
+
+            if (isResuming) {
+                for (chunk in existingChunks) {
+                    chunks.add(chunk)
+                    totalDownloadedBytes.addAndGet(chunk.downloadedBytes)
+                }
+            } else {
+                for (i in 0 until threadCount) {
+                    val startByte = i * chunkSize
+                    val endByte = if (i == threadCount - 1) fileSize - 1 else (i + 1) * chunkSize - 1
+                    val chunk = DownloadChunkInfo(
+                        downloadId = task.id,
+                        chunkIndex = i,
+                        startByte = startByte,
+                        endByte = endByte,
+                        downloadedBytes = 0L,
+                        completed = false,
+                        filePath = file.absolutePath
+                    )
+                    chunks.add(chunk)
+                    chunkDao.insertChunk(chunk)
+                }
+            }
+
+            task = task.copy(threadCount = threadCount, supportsRange = true)
+            onProgress(task)
+
+            if (!file.exists()) {
+                file.createNewFile()
+            }
+
+            val raf = RandomAccessFile(file, "rw")
+            raf.setLength(fileSize)
+            raf.close()
+
+            val chunkJobs = chunks.filter { !it.completed }.map { chunk ->
+                jobScope.async(dispatcher) {
+                    downloadChunkWithRetry(chunk)
+                }
+            }
+
+            val progressJob = jobScope.launch {
+                trackProgress(fileSize)
+            }
+
+            try {
+                chunkJobs.awaitAll()
+            } finally {
+                progressJob.cancel()
+            }
+
+            if (isCancelled.get() || isPaused.get()) return
+
+            val allChunks = chunkDao.getChunksByDownloadId(task.id)
+            val incompleteChunks = allChunks.filter { !it.completed }
+            if (incompleteChunks.isNotEmpty()) {
+                throw IllegalStateException("${incompleteChunks.size} chunk(s) failed to download")
+            }
+        }
+
+        private suspend fun downloadChunkWithRetry(chunk: DownloadChunkInfo) {
+            var retryCount = 0
+            var lastError: Exception? = null
+
+            while (retryCount < MAX_RETRIES) {
+                if (isCancelled.get() || isPaused.get()) return
+
+                try {
+                    downloadChunk(chunk)
+                    return
+                } catch (e: Exception) {
+                    lastError = e
+                    retryCount++
+                    Log.w(TAG, "Chunk ${chunk.chunkIndex} attempt $retryCount failed: ${e.message}")
+                    if (retryCount < MAX_RETRIES && !isCancelled.get() && !isPaused.get()) {
+                        delay(RETRY_DELAY_MS)
+                    }
+                }
+            }
+
+            throw lastError ?: IllegalStateException("Chunk ${chunk.chunkIndex} failed after $MAX_RETRIES retries")
+        }
+
+        private suspend fun downloadChunk(chunk: DownloadChunkInfo) {
+            withContext(Dispatchers.IO) {
+                val currentDownloaded = chunk.downloadedBytes
+                val startByte = chunk.startByte + currentDownloaded
+                val endByte = chunk.endByte
+
+                if (startByte > endByte) {
+                    updateChunkCompletion(chunk)
+                    return@withContext
+                }
+
+                val request = Request.Builder()
+                    .url(task.videoSource)
+                    .header("Range", "bytes=$startByte-$endByte")
+                    .build()
+
+                val response = client.newCall(request).execute()
+
+                val expectedCode = if (currentDownloaded > 0) HttpURLConnection.HTTP_PARTIAL else HttpURLConnection.HTTP_PARTIAL
+                if (response.code != HttpURLConnection.HTTP_PARTIAL && response.code != HttpURLConnection.HTTP_OK) {
+                    response.close()
+                    throw IllegalStateException("HTTP error for chunk ${chunk.chunkIndex}: ${response.code}")
+                }
+
+                val body = response.body ?: throw IllegalStateException("Response body is null for chunk ${chunk.chunkIndex}")
+                val inputStream = body.byteStream()
+                val raf = RandomAccessFile(chunk.filePath, "rw")
+                raf.seek(startByte)
+
+                val buffer = ByteArray(BUFFER_SIZE)
+                var chunkDownloaded = currentDownloaded
+
+                try {
+                    while (true) {
+                        if (isCancelled.get() || isPaused.get()) break
+
+                        val read = inputStream.read(buffer)
+                        if (read == -1) break
+
+                        raf.write(buffer, 0, read)
+                        chunkDownloaded += read.toLong()
+                        totalDownloadedBytes.addAndGet(read.toLong())
+
+                        if (chunkDownloaded % (BUFFER_SIZE * 4) == 0L) {
+                            chunkDao.updateChunk(
+                                chunk.copy(downloadedBytes = chunkDownloaded)
+                            )
+                        }
+                    }
+                } finally {
+                    raf.close()
+                    inputStream.close()
+                    response.close()
+                }
+
+                if (!isCancelled.get() && !isPaused.get()) {
+                    chunkDao.updateChunk(
+                        chunk.copy(downloadedBytes = chunkDownloaded)
+                    )
+
+                    if (chunkDownloaded >= (chunk.endByte - chunk.startByte + 1)) {
+                        updateChunkCompletion(chunk)
+                    }
+                }
+            }
+        }
+
+        private suspend fun updateChunkCompletion(chunk: DownloadChunkInfo) {
+            chunkDao.updateChunk(chunk.copy(completed = true, downloadedBytes = chunk.endByte - chunk.startByte + 1))
+        }
+
+        private suspend fun trackProgress(fileSize: Long) {
+            var lastSpeedUpdate = System.currentTimeMillis()
+            var lastBytesRead = totalDownloadedBytes.get()
+
+            while (currentCoroutineContext().isActive) {
+                delay(SPEED_UPDATE_INTERVAL)
+
+                if (isCancelled.get() || isPaused.get()) break
+
+                val currentBytes = totalDownloadedBytes.get()
+                val now = System.currentTimeMillis()
+                val timeDiff = (now - lastSpeedUpdate).toFloat() / 1000f
+                val speed = if (timeDiff > 0) ((currentBytes - lastBytesRead).toFloat() / timeDiff).toLong() else 0L
+                val remainingTime = if (speed > 0 && fileSize > 0) {
+                    ((fileSize - currentBytes) / speed).toLong()
+                } else 0L
+
+                task = task.copy(
+                    downloadedBytes = currentBytes,
+                    speed = speed,
+                    remainingTime = remainingTime,
+                    updatedAt = now
+                )
+                onProgress(task)
+
+                lastSpeedUpdate = now
+                lastBytesRead = currentBytes
             }
         }
 
@@ -323,9 +533,9 @@ class DownloadManager @Inject constructor(
                 }
 
                 val outputStream = if (task.downloadedBytes > 0 && file.exists()) {
-                    FileOutputStream(file, true)
+                    java.io.FileOutputStream(file, true)
                 } else {
-                    FileOutputStream(file)
+                    java.io.FileOutputStream(file)
                 }
 
                 val inputStream = body.byteStream()
@@ -335,20 +545,20 @@ class DownloadManager @Inject constructor(
                 }
 
                 var bytesRead = task.downloadedBytes
+                totalDownloadedBytes.set(bytesRead)
                 val buffer = ByteArray(BUFFER_SIZE)
                 var lastSpeedUpdate = System.currentTimeMillis()
                 var lastBytesRead = bytesRead
 
                 while (true) {
-                    if (isCancelled || isPaused) {
-                        break
-                    }
+                    if (isCancelled.get() || isPaused.get()) break
 
                     val read = inputStream.read(buffer)
                     if (read == -1) break
 
                     outputStream.write(buffer, 0, read)
                     bytesRead += read
+                    totalDownloadedBytes.set(bytesRead)
 
                     val now = System.currentTimeMillis()
                     if (now - lastSpeedUpdate >= SPEED_UPDATE_INTERVAL) {
@@ -356,9 +566,7 @@ class DownloadManager @Inject constructor(
                         val speed = if (timeDiff > 0) ((bytesRead - lastBytesRead).toFloat() / timeDiff).toLong() else 0L
                         val remainingTime = if (speed > 0 && totalSize > 0) {
                             ((totalSize - bytesRead) / speed).toLong()
-                        } else {
-                            0L
-                        }
+                        } else 0L
 
                         task = task.copy(
                             downloadedBytes = bytesRead,
@@ -371,14 +579,18 @@ class DownloadManager @Inject constructor(
                         lastSpeedUpdate = now
                         lastBytesRead = bytesRead
                     }
-
-                    task = task.copy(downloadedBytes = bytesRead, updatedAt = now)
                 }
 
                 outputStream.close()
                 inputStream.close()
                 response.close()
             }
+        }
+
+        private fun calculateThreadCount(fileSize: Long): Int {
+            if (fileSize < FILE_SIZE_THRESHOLD_FOR_MULTI_THREAD) return 1
+            val count = (fileSize / MIN_CHUNK_SIZE).toInt().coerceIn(2, MAX_THREAD_COUNT)
+            return count
         }
 
         private fun getDownloadDirectory(): File {

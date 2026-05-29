@@ -149,4 +149,13 @@ val enStrings: Map<String, String> = mapOf(
     "ab_loop_b_set" to "B: %s",
     "ab_loop_a_not_set" to "A: --:--",
     "ab_loop_b_not_set" to "B: --:--",
+
+    "multi_thread_download" to "Multi-thread Download",
+    "thread_count" to "%d threads",
+    "single_thread_download" to "Single-thread",
+    "download_verifying" to "Verifying file integrity...",
+    "download_merging" to "Merging file chunks...",
+    "download_chunk_retry" to "Chunk %d retrying (%d/%d)...",
+    "download_integrity_failed" to "File integrity check failed",
+    "download_range_not_supported" to "Server does not support multi-thread download, using single-thread",
 )

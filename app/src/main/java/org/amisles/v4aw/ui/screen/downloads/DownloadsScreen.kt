@@ -455,8 +455,11 @@ fun DownloadTaskCard(
                             else Slate500
                         )
                         if (task.status == DownloadStatus.DOWNLOADING) {
+                            val threadInfo = if (task.threadCount > 1) {
+                                strings.threadCount.format(task.threadCount) + " · "
+                            } else ""
                             Text(
-                                text = "${task.speed} · ${task.remainingTime}",
+                                text = threadInfo + "${task.speed} · ${task.remainingTime}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (isSelected)
                                     MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)

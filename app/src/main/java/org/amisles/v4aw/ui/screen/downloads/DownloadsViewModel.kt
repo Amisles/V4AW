@@ -224,7 +224,9 @@ private fun DownloadInfo.toDownloadTask(): DownloadTask {
         status = status,
         errorMessage = errorMessage,
         filePath = filePath,
-        thumbnailUrl = thumbnailUrl
+        thumbnailUrl = thumbnailUrl,
+        threadCount = threadCount,
+        supportsRange = supportsRange
     )
 }
 
@@ -265,5 +267,7 @@ data class DownloadTask(
     val status: DownloadStatus,
     val errorMessage: String? = null,
     val filePath: String? = null,
-    val thumbnailUrl: String? = null
+    val thumbnailUrl: String? = null,
+    val threadCount: Int = 1,
+    val supportsRange: Boolean = false
 )

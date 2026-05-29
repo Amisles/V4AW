@@ -19,6 +19,8 @@ data class DownloadInfo(
     val speed: Long = 0L,
     val remainingTime: Long = 0L,
     val errorMessage: String? = null,
+    val threadCount: Int = 1,
+    val supportsRange: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

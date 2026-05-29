@@ -152,6 +152,15 @@ interface StringProvider {
     val abLoopANotSet get() = get(StringKey.AB_LOOP_A_NOT_SET)
     val abLoopBNotSet get() = get(StringKey.AB_LOOP_B_NOT_SET)
 
+    val multiThreadDownload get() = get(StringKey.MULTI_THREAD_DOWNLOAD)
+    val threadCount get() = get(StringKey.THREAD_COUNT)
+    val singleThreadDownload get() = get(StringKey.SINGLE_THREAD_DOWNLOAD)
+    val downloadVerifying get() = get(StringKey.DOWNLOAD_VERIFYING)
+    val downloadMerging get() = get(StringKey.DOWNLOAD_MERGING)
+    val downloadChunkRetry get() = get(StringKey.DOWNLOAD_CHUNK_RETRY)
+    val downloadIntegrityFailed get() = get(StringKey.DOWNLOAD_INTEGRITY_FAILED)
+    val downloadRangeNotSupported get() = get(StringKey.DOWNLOAD_RANGE_NOT_SUPPORTED)
+
     fun s(key: String): String = get(key)
 }
 
