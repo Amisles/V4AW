@@ -41,7 +41,10 @@ data class VideoPlayerUiState(
     val isFullscreen: Boolean = false,
     val playbackSpeed: Float = 1.0f,
     val isPictureInPictureSupported: Boolean = false,
-    val isInPictureInPicture: Boolean = false
+    val isInPictureInPicture: Boolean = false,
+    val abLoopA: Long? = null,
+    val abLoopB: Long? = null,
+    val isAbLoopActive: Boolean = false
 )
 
 @UnstableApi
@@ -59,6 +62,7 @@ class VideoPlayerViewModel @Inject constructor(
     private var playerListener: Player.Listener? = null
     private var currentUrl: String? = null
     private var isReleasing = false
+    private var abLoopJob: kotlinx.coroutines.Job? = null
     
     init {
         _uiState.value = _uiState.value.copy(
@@ -254,8 +258,11 @@ class VideoPlayerViewModel @Inject constructor(
     
     fun releasePlayer() {
         isReleasing = true
+        
+        abLoopJob?.cancel()
+        abLoopJob = null
 
-        _uiState.value = _uiState.value.copy(player = null)
+        _uiState.value = _uiState.value.copy(player = null, abLoopA = null, abLoopB = null, isAbLoopActive = false)
 
         player?.let { currentPlayer ->
             try {
@@ -291,6 +298,58 @@ class VideoPlayerViewModel @Inject constructor(
         val currentPlayer = player ?: return false
         pipManager.setPlayer(currentPlayer)
         return pipManager.enterPictureInPictureMode(activity)
+    }
+    
+    fun setAbLoopA() {
+        val currentPosition = player?.currentPosition ?: return
+        _uiState.value = _uiState.value.copy(abLoopA = currentPosition)
+        if (_uiState.value.abLoopB != null && _uiState.value.abLoopB!! > currentPosition) {
+            startAbLoop()
+        }
+    }
+    
+    fun setAbLoopB() {
+        val currentPosition = player?.currentPosition ?: return
+        val a = _uiState.value.abLoopA
+        if (a != null && currentPosition > a) {
+            _uiState.value = _uiState.value.copy(abLoopB = currentPosition)
+            startAbLoop()
+        } else {
+            _uiState.value = _uiState.value.copy(abLoopB = currentPosition)
+        }
+    }
+    
+    private fun startAbLoop() {
+        abLoopJob?.cancel()
+        val a = _uiState.value.abLoopA ?: return
+        val b = _uiState.value.abLoopB ?: return
+        val currentPlayer = player ?: return
+        
+        _uiState.value = _uiState.value.copy(isAbLoopActive = true)
+        
+        if (currentPlayer.currentPosition < a || currentPlayer.currentPosition >= b) {
+            currentPlayer.seekTo(a)
+        }
+        
+        abLoopJob = viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(200)
+                val p = player ?: break
+                if (p.currentPosition >= b) {
+                    p.seekTo(a)
+                }
+            }
+        }
+    }
+    
+    fun clearAbLoop() {
+        abLoopJob?.cancel()
+        abLoopJob = null
+        _uiState.value = _uiState.value.copy(
+            abLoopA = null,
+            abLoopB = null,
+            isAbLoopActive = false
+        )
     }
     
     override fun onCleared() {

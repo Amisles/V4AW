@@ -139,4 +139,14 @@ val enStrings: Map<String, String> = mapOf(
     "today" to "Today",
     "yesterday" to "Yesterday",
     "no_search_result" to "No matching records found",
+
+    "ab_loop" to "AB Loop",
+    "ab_loop_set_a" to "Set A",
+    "ab_loop_set_b" to "Set B",
+    "ab_loop_active" to "AB Loop Active",
+    "ab_loop_cleared" to "AB Loop Cleared",
+    "ab_loop_a_set" to "A: %s",
+    "ab_loop_b_set" to "B: %s",
+    "ab_loop_a_not_set" to "A: --:--",
+    "ab_loop_b_not_set" to "B: --:--",
 )

@@ -138,4 +138,14 @@ object StringKey {
     const val TODAY = "today"
     const val YESTERDAY = "yesterday"
     const val NO_SEARCH_RESULT = "no_search_result"
+
+    const val AB_LOOP = "ab_loop"
+    const val AB_LOOP_SET_A = "ab_loop_set_a"
+    const val AB_LOOP_SET_B = "ab_loop_set_b"
+    const val AB_LOOP_ACTIVE = "ab_loop_active"
+    const val AB_LOOP_CLEARED = "ab_loop_cleared"
+    const val AB_LOOP_A_SET = "ab_loop_a_set"
+    const val AB_LOOP_B_SET = "ab_loop_b_set"
+    const val AB_LOOP_A_NOT_SET = "ab_loop_a_not_set"
+    const val AB_LOOP_B_NOT_SET = "ab_loop_b_not_set"
 }

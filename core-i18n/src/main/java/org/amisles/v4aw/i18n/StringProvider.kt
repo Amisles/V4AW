@@ -142,6 +142,16 @@ interface StringProvider {
     val yesterday get() = get(StringKey.YESTERDAY)
     val noSearchResult get() = get(StringKey.NO_SEARCH_RESULT)
 
+    val abLoop get() = get(StringKey.AB_LOOP)
+    val abLoopSetA get() = get(StringKey.AB_LOOP_SET_A)
+    val abLoopSetB get() = get(StringKey.AB_LOOP_SET_B)
+    val abLoopActive get() = get(StringKey.AB_LOOP_ACTIVE)
+    val abLoopCleared get() = get(StringKey.AB_LOOP_CLEARED)
+    val abLoopASet get() = get(StringKey.AB_LOOP_A_SET)
+    val abLoopBSet get() = get(StringKey.AB_LOOP_B_SET)
+    val abLoopANotSet get() = get(StringKey.AB_LOOP_A_NOT_SET)
+    val abLoopBNotSet get() = get(StringKey.AB_LOOP_B_NOT_SET)
+
     fun s(key: String): String = get(key)
 }
 

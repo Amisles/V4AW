@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.widget.ImageButton
 import android.widget.TextView
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.PictureInPicture
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,11 +54,13 @@ private fun setupPlayerViewButtons(
     viewModel: VideoPlayerViewModel,
     activity: Activity?,
     onToggleFullscreen: () -> Unit,
-    onShowSpeedDialog: () -> Unit
+    onShowSpeedDialog: () -> Unit,
+    onShowAbLoopDialog: () -> Unit
 ) {
     val fullscreenBtn = view.findViewById<View>(R.id.exo_fullscreen_btn)
     val speedBtn = view.findViewById<TextView>(R.id.exo_speed_btn)
     val pipBtn = view.findViewById<View>(R.id.exo_pip_btn)
+    val abLoopBtn = view.findViewById<View>(R.id.exo_ab_loop_btn)
     
     fullscreenBtn?.setOnClickListener { onToggleFullscreen() }
     speedBtn?.text = formatSpeedText(uiState.playbackSpeed)
@@ -74,6 +78,11 @@ private fun setupPlayerViewButtons(
             }
         }
     }
+    
+    abLoopBtn?.setOnClickListener { onShowAbLoopDialog() }
+    if (abLoopBtn is ImageButton) {
+        abLoopBtn.imageAlpha = if (uiState.isAbLoopActive) 255 else 128
+    }
 }
 
 private fun updatePlayerViewSpeed(
@@ -88,6 +97,11 @@ private fun updatePlayerViewSpeed(
         View.VISIBLE
     } else {
         View.GONE
+    }
+    
+    val abLoopBtn = view.findViewById<View>(R.id.exo_ab_loop_btn)
+    if (abLoopBtn is ImageButton) {
+        abLoopBtn.imageAlpha = if (uiState.isAbLoopActive) 255 else 128
     }
 }
 
@@ -106,6 +120,7 @@ fun VideoPlayerScreen(
     var hasInitialized by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
+    var showAbLoopDialog by remember { mutableStateOf(false) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
     val handleNavigateBack: () -> Unit = {
@@ -160,6 +175,7 @@ fun VideoPlayerScreen(
                 uiState = uiState,
                 onToggleFullscreen = { viewModel.toggleFullscreen() },
                 onShowSpeedDialog = { showSpeedDialog = true },
+                onShowAbLoopDialog = { showAbLoopDialog = true },
                 onPlayerViewCreated = { playerViewRef = it },
                 onTap = {
                     playerViewRef?.let { pv ->
@@ -179,6 +195,7 @@ fun VideoPlayerScreen(
                 onPlayVideo = { viewModel.playVideo(it) },
                 onShowDownloadDialog = { showDownloadDialog = true },
                 onShowSpeedDialog = { showSpeedDialog = true },
+                onShowAbLoopDialog = { showAbLoopDialog = true },
                 onPlayerViewCreated = { playerViewRef = it },
                 onTap = {
                     playerViewRef?.let { pv ->
@@ -216,6 +233,19 @@ fun VideoPlayerScreen(
                 showSpeedDialog = false
             },
             onDismiss = { showSpeedDialog = false }
+        )
+    }
+
+    if (showAbLoopDialog) {
+        AbLoopDialog(
+            uiState = uiState,
+            onSetA = { viewModel.setAbLoopA() },
+            onSetB = { viewModel.setAbLoopB() },
+            onClear = {
+                viewModel.clearAbLoop()
+                showAbLoopDialog = false
+            },
+            onDismiss = { showAbLoopDialog = false }
         )
     }
 }
@@ -380,6 +410,7 @@ private fun FullscreenPlayerView(
     uiState: VideoPlayerUiState,
     onToggleFullscreen: () -> Unit,
     onShowSpeedDialog: () -> Unit,
+    onShowAbLoopDialog: () -> Unit,
     onPlayerViewCreated: (PlayerView) -> Unit,
     onTap: () -> Unit
 ) {
@@ -427,7 +458,8 @@ private fun FullscreenPlayerView(
                     viewModel = viewModel,
                     activity = activity,
                     onToggleFullscreen = onToggleFullscreen,
-                    onShowSpeedDialog = onShowSpeedDialog
+                    onShowSpeedDialog = onShowSpeedDialog,
+                    onShowAbLoopDialog = onShowAbLoopDialog
                 )
             } as View
         },
@@ -452,6 +484,7 @@ private fun NormalPlayerView(
     onPlayVideo: (String) -> Unit,
     onShowDownloadDialog: () -> Unit,
     onShowSpeedDialog: () -> Unit,
+    onShowAbLoopDialog: () -> Unit,
     onPlayerViewCreated: (PlayerView) -> Unit,
     onTap: () -> Unit
 ) {
@@ -521,6 +554,14 @@ private fun NormalPlayerView(
                         tint = Slate800
                     )
                 }
+            }
+            
+            IconButton(onClick = onShowAbLoopDialog) {
+                Icon(
+                    Icons.Default.Autorenew,
+                    contentDescription = strings.abLoop,
+                    tint = if (uiState.isAbLoopActive) MaterialTheme.colorScheme.primary else Slate800
+                )
             }
             
             if (!isLocalVideo) {
@@ -866,13 +907,111 @@ private fun PipPlayerView(
                 val fullscreenBtn = view.findViewById<View>(R.id.exo_fullscreen_btn)
                 val speedBtn = view.findViewById<View>(R.id.exo_speed_btn)
                 val pipBtn = view.findViewById<View>(R.id.exo_pip_btn)
+                val abLoopBtn = view.findViewById<View>(R.id.exo_ab_loop_btn)
                 fullscreenBtn?.visibility = View.GONE
                 speedBtn?.visibility = View.GONE
                 pipBtn?.visibility = View.GONE
+                abLoopBtn?.visibility = View.GONE
             } as View
         },
         modifier = Modifier
             .fillMaxSize()
             .background(androidx.compose.ui.graphics.Color.Black)
+    )
+}
+
+private fun formatTimeMs(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        String.format("%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format("%02d:%02d", minutes, seconds)
+    }
+}
+
+@Composable
+private fun AbLoopDialog(
+    uiState: VideoPlayerUiState,
+    onSetA: () -> Unit,
+    onSetB: () -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val strings = LocalStrings.current
+    val aText = uiState.abLoopA?.let { strings.abLoopASet.format(formatTimeMs(it)) } ?: strings.abLoopANotSet
+    val bText = uiState.abLoopB?.let { strings.abLoopBSet.format(formatTimeMs(it)) } ?: strings.abLoopBNotSet
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(strings.abLoop) },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (uiState.isAbLoopActive) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = androidx.compose.ui.graphics.Color(0xFFE8F5E9),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = strings.abLoopActive,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = androidx.compose.ui.graphics.Color(0xFF2E7D32),
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = aText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = Slate800
+                    )
+                    OutlinedButton(onClick = onSetA) {
+                        Text(strings.abLoopSetA)
+                    }
+                }
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = bText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = Slate800
+                    )
+                    OutlinedButton(
+                        onClick = onSetB,
+                        enabled = uiState.abLoopA != null
+                    ) {
+                        Text(strings.abLoopSetB)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (uiState.isAbLoopActive) {
+                TextButton(onClick = onClear) {
+                    Text(strings.abLoopCleared)
+                }
+            }
+            TextButton(onClick = onDismiss) {
+                Text(strings.cancel)
+            }
+        }
     )
 }

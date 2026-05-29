@@ -139,4 +139,14 @@ val zhStrings: Map<String, String> = mapOf(
     "today" to "今天",
     "yesterday" to "昨天",
     "no_search_result" to "未找到匹配的记录",
+
+    "ab_loop" to "AB循环",
+    "ab_loop_set_a" to "设置A点",
+    "ab_loop_set_b" to "设置B点",
+    "ab_loop_active" to "AB循环已启用",
+    "ab_loop_cleared" to "AB循环已清除",
+    "ab_loop_a_set" to "A: %s",
+    "ab_loop_b_set" to "B: %s",
+    "ab_loop_a_not_set" to "A: --:--",
+    "ab_loop_b_not_set" to "B: --:--",
 )
