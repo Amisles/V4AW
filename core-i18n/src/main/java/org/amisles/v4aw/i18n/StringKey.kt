@@ -1,0 +1,137 @@
+package org.amisles.v4aw.i18n
+
+object StringKey {
+    const val APP_NAME = "app_name"
+    const val APP_FULL_NAME = "app_full_name"
+    const val APP_SUBTITLE = "app_subtitle"
+
+    const val HOME = "home"
+    const val HISTORY = "history"
+    const val DOWNLOADS = "downloads"
+    const val PROFILE = "profile"
+
+    const val GET_VIDEO = "get_video"
+    const val PASTE_URL_HINT = "paste_url_hint"
+    const val PARSE = "parse"
+    const val PARSING = "parsing"
+
+    const val USAGE_GUIDE = "usage_guide"
+    const val STEP1_COPY_LINK = "step1_copy_link"
+    const val STEP2_PASTE_URL = "step2_paste_url"
+    const val STEP3_PARSE_ENJOY = "step3_parse_enjoy"
+
+    const val ERROR_EMPTY_URL = "error_empty_url"
+    const val ERROR_INVALID_URL = "error_invalid_url"
+    const val ERROR_PARSE_FAILED = "error_parse_failed"
+
+    const val HISTORY_TITLE = "history_title"
+    const val NO_HISTORY = "no_history"
+    const val NO_HISTORY_HINT = "no_history_hint"
+    const val SELECTED_COUNT = "selected_count"
+    const val SELECT_ALL = "select_all"
+    const val CANCEL_SELECTION = "cancel_selection"
+    const val SELECT = "select"
+    const val CLEAR_ALL = "clear_all"
+    const val DELETE_SELECTED = "delete_selected"
+    const val DELETE_CONFIRM_SELECTED = "delete_confirm_selected"
+    const val DELETE_CONFIRM_ALL = "delete_confirm_all"
+    const val DELETE = "delete"
+    const val CANCEL = "cancel"
+    const val CONFIRM = "confirm"
+
+    const val FEATURE_SERVICES = "feature_services"
+    const val DOWNLOAD_MANAGEMENT = "download_management"
+    const val NOT_AVAILABLE = "not_available"
+    const val MY_FAVORITES = "my_favorites"
+    const val PLAY_HISTORY = "play_history"
+
+    const val SYSTEM_SETTINGS = "system_settings"
+    const val LLM_API_CONFIG = "llm_api_config"
+    const val APPEARANCE_SETTINGS = "appearance_settings"
+    const val CLEAR_CACHE = "clear_cache"
+    const val ABOUT_APP = "about_app"
+
+    const val CLEAR_CACHE_TITLE = "clear_cache_title"
+    const val CLEAR_CACHE_MESSAGE = "clear_cache_message"
+    const val CURRENT_CACHE_SIZE = "current_cache_size"
+
+    const val SECURITY_DISCLAIMER_TITLE = "security_disclaimer_title"
+    const val SECURITY_DISCLAIMER_CONTENT = "security_disclaimer_content"
+
+    const val ABOUT_APP_TITLE = "about_app_title"
+    const val VERSION = "version"
+    const val PROJECT_DESCRIPTION_TITLE = "project_description_title"
+    const val PROJECT_DESCRIPTION_CONTENT = "project_description_content"
+    const val TECH_STACK_TITLE = "tech_stack_title"
+    const val TECH_STACK_CONTENT = "tech_stack_content"
+    const val OPEN_SOURCE_LICENSE_TITLE = "open_source_license_title"
+    const val OPEN_SOURCE_LICENSE_CONTENT = "open_source_license_content"
+
+    const val LLM_MODEL_TITLE = "llm_model_title"
+    const val API_KEY_TITLE = "api_key_title"
+    const val API_KEY_PLACEHOLDER = "api_key_placeholder"
+    const val API_KEY_LOCAL_ONLY = "api_key_local_only"
+    const val SAVING = "saving"
+    const val SAVE_CONFIG = "save_config"
+
+    const val DOWNLOADING_TAB = "downloading_tab"
+    const val COMPLETED_TAB = "completed_tab"
+    const val FAILED_TAB = "failed_tab"
+
+    const val DOWNLOADING = "downloading"
+    const val COMPLETED = "completed"
+    const val STORAGE_SPACE = "storage_space"
+
+    const val NO_DOWNLOAD_TASKS = "no_download_tasks"
+    const val NO_COMPLETED_TASKS = "no_completed_tasks"
+    const val NO_FAILED_TASKS = "no_failed_tasks"
+    const val NO_DOWNLOAD_TASKS_HINT = "no_download_tasks_hint"
+    const val NO_COMPLETED_TASKS_HINT = "no_completed_tasks_hint"
+    const val NO_FAILED_TASKS_HINT = "no_failed_tasks_hint"
+
+    const val DELETE_DOWNLOAD_TITLE = "delete_download_title"
+    const val DELETE_DOWNLOAD_MESSAGE = "delete_download_message"
+
+    const val PAUSE = "pause"
+    const val RESUME = "resume"
+    const val PLAY = "play"
+    const val RETRY = "retry"
+
+    const val RESOURCE_PREVIEW = "resource_preview"
+    const val PARSING_VIDEO = "parsing_video"
+    const val VIDEO_PLAY = "video_play"
+    const val RELATED_RESOURCES = "related_resources"
+    const val AVAILABLE_SOURCES_LABEL = "available_sources_label"
+    const val SELECT_SOURCE_TO_DOWNLOAD = "select_source_to_download"
+    const val DOWNLOAD_TIP = "download_tip"
+    const val NO_AVAILABLE_SOURCES = "no_available_sources"
+    const val DOWNLOADABLE = "downloadable"
+    const val STREAMING_FORMAT = "streaming_format"
+    const val UNKNOWN_FORMAT = "unknown_format"
+    const val TRYING_FALLBACK = "trying_fallback"
+    const val PLAYBACK_ERROR = "playback_error"
+    const val NO_PLAYABLE_SOURCE = "no_playable_source"
+
+    const val CALCULATING = "calculating"
+
+    const val LANGUAGE_SETTING = "language_setting"
+    const val LANGUAGE_SWITCH = "language_switch"
+
+    const val DEEPSEEK_API_KEY_PLACEHOLDER = "deepseek_api_key_placeholder"
+    const val HUNYUAN_API_KEY_PLACEHOLDER = "hunyuan_api_key_placeholder"
+    const val DEEPSEEK_V4_FLASH = "deepseek_v4_flash"
+    const val HUNYUAN_LITE = "hunyuan_lite"
+
+    const val UNKNOWN_SIZE = "unknown_size"
+    const val TIME_HOURS = "time_hours"
+    const val TIME_MINUTES = "time_minutes"
+    const val TIME_SECONDS = "time_seconds"
+    const val STREAMING_FORMAT_DOWNLOAD_ERROR = "streaming_format_download_error"
+
+    const val PLAYBACK_SPEED = "playback_speed"
+
+    const val SEARCH_HISTORY = "search_history"
+    const val TODAY = "today"
+    const val YESTERDAY = "yesterday"
+    const val NO_SEARCH_RESULT = "no_search_result"
+}

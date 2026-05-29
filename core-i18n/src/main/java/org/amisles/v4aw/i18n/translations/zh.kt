@@ -1,0 +1,138 @@
+package org.amisles.v4aw.i18n.translations
+
+val zhStrings: Map<String, String> = mapOf(
+    "app_name" to "Video4AW",
+    "app_full_name" to "Video For All Web",
+    "app_subtitle" to "开源视频解析工具",
+
+    "home" to "首页",
+    "history" to "历史",
+    "downloads" to "下载",
+    "profile" to "我的",
+
+    "get_video" to "获取视频",
+    "paste_url_hint" to "粘贴网页地址，提取纯净资源",
+    "parse" to "解析",
+    "parsing" to "解析中...",
+
+    "usage_guide" to "使用方法",
+    "step1_copy_link" to "复制视频网页链接",
+    "step2_paste_url" to "粘贴到上方输入框",
+    "step3_parse_enjoy" to "点击解析，畅享无广告视频",
+
+    "error_empty_url" to "请输入网址",
+    "error_invalid_url" to "请输入有效的网址（如 https://example.com）",
+    "error_parse_failed" to "解析失败",
+
+    "history_title" to "历史",
+    "no_history" to "暂无历史记录",
+    "no_history_hint" to "解析过的视频将显示在这里",
+    "selected_count" to "已选择 %d 项",
+    "select_all" to "全选",
+    "cancel_selection" to "取消选择",
+    "select" to "选择",
+    "clear_all" to "清空",
+    "delete_selected" to "删除选中",
+    "delete_confirm_selected" to "确定要删除选中的 %d 项历史记录吗？",
+    "delete_confirm_all" to "确定要清空所有历史记录吗？",
+    "delete" to "删除",
+    "cancel" to "取消",
+    "confirm" to "确定",
+
+    "feature_services" to "功能服务",
+    "download_management" to "下载管理",
+    "not_available" to "暂未开放",
+    "my_favorites" to "我的收藏",
+    "play_history" to "播放历史",
+
+    "system_settings" to "系统设置",
+    "llm_api_config" to "大模型 API 配置",
+    "appearance_settings" to "外观设置",
+    "clear_cache" to "清除缓存",
+    "about_app" to "关于应用",
+
+    "clear_cache_title" to "清除缓存",
+    "clear_cache_message" to "确定要清除所有缓存数据吗？",
+    "current_cache_size" to "当前缓存大小：%s",
+
+    "security_disclaimer_title" to "安全提示与免责声明",
+    "security_disclaimer_content" to "本项目为开源软件，仅供学习与研究使用。请遵守当地法律法规，安全合法地使用本应用，不得利用本工具从事任何违法违规行为。\n\n请遵守GPL-3开源协议，并禁止以任何方式将本项目或其衍生作品用于盈利目的。本应用不提供任何视频内容，仅提供技术解析功能，使用者需自行承担使用风险与法律责任。",
+
+    "about_app_title" to "关于应用",
+    "version" to "版本 %s",
+    "project_description_title" to "项目说明",
+    "project_description_content" to "Video For All Web 是一款开源视频解析工具，旨在为用户提供便捷的网页视频资源提取功能。本应用基于 Android Jetpack Compose 构建，采用 MVVM 架构，集成了 WebView 智能解析、HTML 结构分析等技术，帮助用户从公开网页中提取视频播放地址。",
+    "tech_stack_title" to "技术栈",
+    "tech_stack_content" to "Jetpack Compose · Material Design 3 · Hilt · Room · Media3 (ExoPlayer) · Jsoup · OkHttp · Kotlin Coroutines · DataStore",
+    "open_source_license_title" to "开源许可",
+    "open_source_license_content" to "本项目遵循开源协议发布。本应用使用了以下开源库：Jetpack Compose、Material Design 3、Hilt、Room、Media3、Jsoup、OkHttp、kotlinx.serialization、DataStore 等。各开源库的版权归原作者所有。",
+
+    "llm_model_title" to "LLM 模型",
+    "api_key_title" to "API Key",
+    "api_key_placeholder" to "sk-...",
+    "api_key_local_only" to "您的 API Key 仅保存在本地，不会共享",
+    "saving" to "保存中...",
+    "save_config" to "保存配置",
+
+    "downloading_tab" to "下载中",
+    "completed_tab" to "已完成",
+    "failed_tab" to "失败",
+
+    "downloading" to "下载中",
+    "completed" to "已完成",
+    "storage_space" to "存储空间",
+
+    "no_download_tasks" to "暂无下载任务",
+    "no_completed_tasks" to "暂无已完成任务",
+    "no_failed_tasks" to "暂无失败任务",
+    "no_download_tasks_hint" to "解析视频后可以在这里下载",
+    "no_completed_tasks_hint" to "下载完成的视频将显示在这里",
+    "no_failed_tasks_hint" to "下载失败的任务可以在这里重试",
+
+    "delete_download_title" to "删除选中",
+    "delete_download_message" to "确定要删除选中的 %d 项下载任务吗？",
+
+    "pause" to "暂停",
+    "resume" to "继续",
+    "play" to "播放",
+    "retry" to "重试",
+
+    "resource_preview" to "资源预览",
+    "parsing_video" to "解析视频中...",
+    "video_play" to "视频播放",
+    "related_resources" to "相关资源",
+    "available_sources_label" to "可用源：",
+    "select_source_to_download" to "选择视频源下载",
+    "download_tip" to "💡 提示：绿色标记的是可直接下载的格式（mp4/webm）。m3u8/mpd等流式格式暂不支持下载。",
+    "no_available_sources" to "没有可用的视频源",
+    "downloadable" to "可下载",
+    "streaming_format" to "流式格式（暂不支持）",
+    "unknown_format" to "格式未知",
+    "trying_fallback" to "正在尝试备用模式...",
+    "playback_error" to "播放错误：%s",
+    "no_playable_source" to "未找到可播放的视频源",
+
+    "calculating" to "计算中...",
+
+    "language_setting" to "语言设置",
+    "language_switch" to "语言切换",
+
+    "deepseek_api_key_placeholder" to "输入您的 DeepSeek API Key",
+    "hunyuan_api_key_placeholder" to "输入您的混元 API Key",
+    "deepseek_v4_flash" to "DeepSeek V4 Flash",
+    "hunyuan_lite" to "混元 Lite",
+
+    "unknown_size" to "未知大小",
+    "time_hours" to "%d小时",
+    "time_minutes" to "%d分钟",
+    "time_seconds" to "%d秒",
+
+    "streaming_format_download_error" to "该视频源是流式播放格式（m3u8/mpd），暂不支持直接下载。请选择mp4/webm等直接视频源。",
+
+    "playback_speed" to "播放速度",
+
+    "search_history" to "搜索历史记录",
+    "today" to "今天",
+    "yesterday" to "昨天",
+    "no_search_result" to "未找到匹配的记录",
+)

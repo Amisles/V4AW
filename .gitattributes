@@ -1,0 +1,36 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Force text files to use LF line endings
+*.kt text eol=lf
+*.java text eol=lf
+*.xml text eol=lf
+*.gradle text eol=lf
+*.kts text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.properties text eol=lf
+*.txt text eol=lf
+
+# Force batch scripts to always use CRLF line endings
+*.bat text eol=crlf
+
+# Prevent binary files from being normalized
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mov binary
+*.mp4 binary
+*.mp3 binary
+*.flv binary
+*.webm binary
+*.m3u8 binary
+*.mpd binary
+*.zip binary
+*.jar binary
+*.apk binary
+*.aab binary
+*.keystore binary
+*.jks binary

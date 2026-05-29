@@ -1,0 +1,138 @@
+package org.amisles.v4aw.i18n.translations
+
+val enStrings: Map<String, String> = mapOf(
+    "app_name" to "Video4AW",
+    "app_full_name" to "Video For All Web",
+    "app_subtitle" to "Open-source video parsing tool",
+
+    "home" to "Home",
+    "history" to "History",
+    "downloads" to "Downloads",
+    "profile" to "Me",
+
+    "get_video" to "Get Video",
+    "paste_url_hint" to "Paste a web address to extract clean resources",
+    "parse" to "Parse",
+    "parsing" to "Parsing...",
+
+    "usage_guide" to "How to Use",
+    "step1_copy_link" to "Copy the video web page link",
+    "step2_paste_url" to "Paste it into the input box above",
+    "step3_parse_enjoy" to "Tap Parse and enjoy ad-free video",
+
+    "error_empty_url" to "Please enter a URL",
+    "error_invalid_url" to "Please enter a valid URL (e.g., https://example.com)",
+    "error_parse_failed" to "Parse failed",
+
+    "history_title" to "History",
+    "no_history" to "No history yet",
+    "no_history_hint" to "Parsed videos will appear here",
+    "selected_count" to "%d selected",
+    "select_all" to "Select all",
+    "cancel_selection" to "Cancel selection",
+    "select" to "Select",
+    "clear_all" to "Clear all",
+    "delete_selected" to "Delete selected",
+    "delete_confirm_selected" to "Are you sure you want to delete %d selected history items?",
+    "delete_confirm_all" to "Are you sure you want to clear all history?",
+    "delete" to "Delete",
+    "cancel" to "Cancel",
+    "confirm" to "Confirm",
+
+    "feature_services" to "Features",
+    "download_management" to "Download Management",
+    "not_available" to "Coming soon",
+    "my_favorites" to "My Favorites",
+    "play_history" to "Play History",
+
+    "system_settings" to "Settings",
+    "llm_api_config" to "LLM API Configuration",
+    "appearance_settings" to "Appearance",
+    "clear_cache" to "Clear Cache",
+    "about_app" to "About",
+
+    "clear_cache_title" to "Clear Cache",
+    "clear_cache_message" to "Are you sure you want to clear all cached data?",
+    "current_cache_size" to "Current cache size: %s",
+
+    "security_disclaimer_title" to "Security Notice & Disclaimer",
+    "security_disclaimer_content" to "This project is open-source software intended for learning and research purposes only. Please comply with local laws and regulations, use this application safely and legally, and do not use this tool for any illegal activities.\n\nPlease comply with the GPL-3 open-source license, and do not use this project or its derivative works for commercial purposes in any form. This application does not provide any video content; it only provides technical parsing functionality. Users bear all risks and legal responsibilities arising from the use of this application.",
+
+    "about_app_title" to "About",
+    "version" to "Version %s",
+    "project_description_title" to "About the Project",
+    "project_description_content" to "Video For All Web is an open-source video parsing tool designed to provide users with convenient web video resource extraction. Built with Android Jetpack Compose and MVVM architecture, it integrates WebView intelligent parsing, HTML structure analysis, and other technologies to help users extract video playback addresses from public web pages.",
+    "tech_stack_title" to "Tech Stack",
+    "tech_stack_content" to "Jetpack Compose · Material Design 3 · Hilt · Room · Media3 (ExoPlayer) · Jsoup · OkHttp · Kotlin Coroutines · DataStore",
+    "open_source_license_title" to "Open Source Licenses",
+    "open_source_license_content" to "This project is released under an open-source license. This application uses the following open-source libraries: Jetpack Compose, Material Design 3, Hilt, Room, Media3, Jsoup, OkHttp, kotlinx.serialization, DataStore, etc. All open-source libraries are copyrighted by their respective authors.",
+
+    "llm_model_title" to "LLM Model",
+    "api_key_title" to "API Key",
+    "api_key_placeholder" to "sk-...",
+    "api_key_local_only" to "Your API Key is stored locally only and will not be shared",
+    "saving" to "Saving...",
+    "save_config" to "Save Configuration",
+
+    "downloading_tab" to "Downloading",
+    "completed_tab" to "Completed",
+    "failed_tab" to "Failed",
+
+    "downloading" to "Downloading",
+    "completed" to "Completed",
+    "storage_space" to "Storage",
+
+    "no_download_tasks" to "No download tasks",
+    "no_completed_tasks" to "No completed tasks",
+    "no_failed_tasks" to "No failed tasks",
+    "no_download_tasks_hint" to "Download tasks will appear here after parsing",
+    "no_completed_tasks_hint" to "Completed downloads will appear here",
+    "no_failed_tasks_hint" to "Failed downloads can be retried here",
+
+    "delete_download_title" to "Delete Selected",
+    "delete_download_message" to "Are you sure you want to delete %d selected download tasks?",
+
+    "pause" to "Pause",
+    "resume" to "Resume",
+    "play" to "Play",
+    "retry" to "Retry",
+
+    "resource_preview" to "Resource Preview",
+    "parsing_video" to "Parsing video...",
+    "video_play" to "Video Playback",
+    "related_resources" to "Related Resources",
+    "available_sources_label" to "Available sources:",
+    "select_source_to_download" to "Select a source to download",
+    "download_tip" to "💡 Tip: Sources marked in green are directly downloadable formats (mp4/webm). Streaming formats like m3u8/mpd are not supported for download yet.",
+    "no_available_sources" to "No video sources available",
+    "downloadable" to "Downloadable",
+    "streaming_format" to "Streaming format (not supported)",
+    "unknown_format" to "Unknown format",
+    "trying_fallback" to "Trying fallback mode...",
+    "playback_error" to "Playback error: %s",
+    "no_playable_source" to "No playable video source found",
+
+    "calculating" to "Calculating...",
+
+    "language_setting" to "Language",
+    "language_switch" to "Language Switch",
+
+    "deepseek_api_key_placeholder" to "Enter your DeepSeek API key",
+    "hunyuan_api_key_placeholder" to "Enter your Hunyuan API key",
+    "deepseek_v4_flash" to "DeepSeek V4 Flash",
+    "hunyuan_lite" to "Hunyuan Lite",
+
+    "unknown_size" to "Unknown size",
+    "time_hours" to "%d hr",
+    "time_minutes" to "%d min",
+    "time_seconds" to "%d sec",
+
+    "streaming_format_download_error" to "This video source uses a streaming format (m3u8/mpd) which is not supported for direct download. Please select a direct video source such as mp4/webm.",
+
+    "playback_speed" to "Playback Speed",
+
+    "search_history" to "Search history",
+    "today" to "Today",
+    "yesterday" to "Yesterday",
+    "no_search_result" to "No matching records found",
+)
