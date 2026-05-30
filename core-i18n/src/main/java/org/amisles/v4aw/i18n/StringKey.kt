@@ -106,6 +106,7 @@ object StringKey {
     const val DOWNLOAD_TIP = "download_tip"
     const val NO_AVAILABLE_SOURCES = "no_available_sources"
     const val DOWNLOADABLE = "downloadable"
+    const val HLS_DOWNLOADABLE = "hls_downloadable"
     const val STREAMING_FORMAT = "streaming_format"
     const val UNKNOWN_FORMAT = "unknown_format"
     const val TRYING_FALLBACK = "trying_fallback"
@@ -157,4 +158,11 @@ object StringKey {
     const val DOWNLOAD_CHUNK_RETRY = "download_chunk_retry"
     const val DOWNLOAD_INTEGRITY_FAILED = "download_integrity_failed"
     const val DOWNLOAD_RANGE_NOT_SUPPORTED = "download_range_not_supported"
+
+    const val HLS_PARSING_PLAYLIST = "hls_parsing_playlist"
+    const val HLS_DOWNLOADING_SEGMENTS = "hls_downloading_segments"
+    const val HLS_MERGING_SEGMENTS = "hls_merging_segments"
+    const val HLS_DECRYPTING_SEGMENT = "hls_decrypting_segment"
+    const val HLS_NO_SEGMENTS = "hls_no_segments"
+    const val HLS_PARSE_FAILED = "hls_parse_failed"
 }

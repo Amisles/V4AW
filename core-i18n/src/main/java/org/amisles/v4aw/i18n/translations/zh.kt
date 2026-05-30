@@ -103,9 +103,10 @@ val zhStrings: Map<String, String> = mapOf(
     "related_resources" to "相关资源",
     "available_sources_label" to "可用源：",
     "select_source_to_download" to "选择视频源下载",
-    "download_tip" to "💡 提示：绿色标记的是可直接下载的格式（mp4/webm）。m3u8/mpd等流式格式暂不支持下载。",
+    "download_tip" to "💡 提示：绿色=直接下载（mp4/webm），橙色=HLS下载（m3u8），红色=暂不支持（mpd）。",
     "no_available_sources" to "没有可用的视频源",
     "downloadable" to "可下载",
+    "hls_downloadable" to "HLS可下载",
     "streaming_format" to "流式格式（暂不支持）",
     "unknown_format" to "格式未知",
     "trying_fallback" to "正在尝试备用模式...",
@@ -127,7 +128,7 @@ val zhStrings: Map<String, String> = mapOf(
     "time_minutes" to "%d分钟",
     "time_seconds" to "%d秒",
 
-    "streaming_format_download_error" to "该视频源是流式播放格式（m3u8/mpd），暂不支持直接下载。请选择mp4/webm等直接视频源。",
+    "streaming_format_download_error" to "该视频源使用DASH流式格式（mpd），暂不支持下载。请选择mp4/webm/m3u8等视频源。",
 
     "playback_speed" to "播放速度",
     
@@ -158,4 +159,11 @@ val zhStrings: Map<String, String> = mapOf(
     "download_chunk_retry" to "分块 %d 重试中 (%d/%d)...",
     "download_integrity_failed" to "文件完整性校验失败",
     "download_range_not_supported" to "服务器不支持多线程下载，使用单线程下载",
+
+    "hls_parsing_playlist" to "正在解析HLS播放列表...",
+    "hls_downloading_segments" to "正在下载HLS分片 (%d/%d)...",
+    "hls_merging_segments" to "正在合并HLS分片...",
+    "hls_decrypting_segment" to "正在解密分片 %d...",
+    "hls_no_segments" to "HLS播放列表中未找到分片",
+    "hls_parse_failed" to "HLS播放列表解析失败",
 )

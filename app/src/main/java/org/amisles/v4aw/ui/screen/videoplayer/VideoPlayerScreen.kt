@@ -302,6 +302,7 @@ fun DownloadDialog(
                                 source
                             }
                             val isDownloadable = isDownloadableSource(source)
+                            val isHls = isHlsSource(source)
                             val isStreaming = isStreamingSource(source)
                             
                             Card(
@@ -315,7 +316,11 @@ fun DownloadDialog(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (isDownloadable) {
-                                        androidx.compose.ui.graphics.Color(0xFFE8F5E9)
+                                        if (isHls) {
+                                            androidx.compose.ui.graphics.Color(0xFFFFF8E1)
+                                        } else {
+                                            androidx.compose.ui.graphics.Color(0xFFE8F5E9)
+                                        }
                                     } else if (isStreaming) {
                                         androidx.compose.ui.graphics.Color(0xFFFFEBEE)
                                     } else {
@@ -336,18 +341,33 @@ fun DownloadDialog(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         if (isDownloadable) {
-                                            Icon(
-                                                Icons.Default.CheckCircle,
-                                                contentDescription = strings.downloadable,
-                                                tint = androidx.compose.ui.graphics.Color(0xFF4CAF50),
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = strings.downloadable,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = androidx.compose.ui.graphics.Color(0xFF4CAF50)
-                                            )
+                                            if (isHls) {
+                                                Icon(
+                                                    Icons.Default.Download,
+                                                    contentDescription = strings.hlsDownloadable,
+                                                    tint = androidx.compose.ui.graphics.Color(0xFFFF9800),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = strings.hlsDownloadable,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = androidx.compose.ui.graphics.Color(0xFFFF9800)
+                                                )
+                                            } else {
+                                                Icon(
+                                                    Icons.Default.CheckCircle,
+                                                    contentDescription = strings.downloadable,
+                                                    tint = androidx.compose.ui.graphics.Color(0xFF4CAF50),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = strings.downloadable,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                                                )
+                                            }
                                         } else if (isStreaming) {
                                             Icon(
                                                 Icons.Default.Warning,
@@ -393,13 +413,17 @@ fun DownloadDialog(
 
 private fun isDownloadableSource(url: String): Boolean {
     val lowerUrl = url.lowercase()
-    val downloadableExtensions = listOf(".mp4", ".webm", ".flv", ".mov", ".ts", ".m4v")
+    val downloadableExtensions = listOf(".mp4", ".webm", ".flv", ".mov", ".ts", ".m4v", ".m3u8")
     return downloadableExtensions.any { lowerUrl.contains(it) }
+}
+
+private fun isHlsSource(url: String): Boolean {
+    return url.lowercase().contains(".m3u8")
 }
 
 private fun isStreamingSource(url: String): Boolean {
     val lowerUrl = url.lowercase()
-    val streamingExtensions = listOf(".m3u8", ".mpd")
+    val streamingExtensions = listOf(".mpd")
     return streamingExtensions.any { lowerUrl.contains(it) }
 }
 

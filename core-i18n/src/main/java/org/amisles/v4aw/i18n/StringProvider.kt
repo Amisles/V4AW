@@ -109,6 +109,7 @@ interface StringProvider {
     val downloadTip get() = get(StringKey.DOWNLOAD_TIP)
     val noAvailableSources get() = get(StringKey.NO_AVAILABLE_SOURCES)
     val downloadable get() = get(StringKey.DOWNLOADABLE)
+    val hlsDownloadable get() = get(StringKey.HLS_DOWNLOADABLE)
     val streamingFormat get() = get(StringKey.STREAMING_FORMAT)
     val unknownFormat get() = get(StringKey.UNKNOWN_FORMAT)
     val tryingFallback get() = get(StringKey.TRYING_FALLBACK)
@@ -160,6 +161,13 @@ interface StringProvider {
     val downloadChunkRetry get() = get(StringKey.DOWNLOAD_CHUNK_RETRY)
     val downloadIntegrityFailed get() = get(StringKey.DOWNLOAD_INTEGRITY_FAILED)
     val downloadRangeNotSupported get() = get(StringKey.DOWNLOAD_RANGE_NOT_SUPPORTED)
+
+    val hlsParsingPlaylist get() = get(StringKey.HLS_PARSING_PLAYLIST)
+    val hlsDownloadingSegments get() = get(StringKey.HLS_DOWNLOADING_SEGMENTS)
+    val hlsMergingSegments get() = get(StringKey.HLS_MERGING_SEGMENTS)
+    val hlsDecryptingSegment get() = get(StringKey.HLS_DECRYPTING_SEGMENT)
+    val hlsNoSegments get() = get(StringKey.HLS_NO_SEGMENTS)
+    val hlsParseFailed get() = get(StringKey.HLS_PARSE_FAILED)
 
     fun s(key: String): String = get(key)
 }

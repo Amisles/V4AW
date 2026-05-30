@@ -103,9 +103,10 @@ val enStrings: Map<String, String> = mapOf(
     "related_resources" to "Related Resources",
     "available_sources_label" to "Available sources:",
     "select_source_to_download" to "Select a source to download",
-    "download_tip" to "💡 Tip: Sources marked in green are directly downloadable formats (mp4/webm). Streaming formats like m3u8/mpd are not supported for download yet.",
+    "download_tip" to "💡 Tip: Green = direct download (mp4/webm), Orange = HLS download (m3u8), Red = not supported (mpd).",
     "no_available_sources" to "No video sources available",
     "downloadable" to "Downloadable",
+    "hls_downloadable" to "HLS Downloadable",
     "streaming_format" to "Streaming format (not supported)",
     "unknown_format" to "Unknown format",
     "trying_fallback" to "Trying fallback mode...",
@@ -127,7 +128,7 @@ val enStrings: Map<String, String> = mapOf(
     "time_minutes" to "%d min",
     "time_seconds" to "%d sec",
 
-    "streaming_format_download_error" to "This video source uses a streaming format (m3u8/mpd) which is not supported for direct download. Please select a direct video source such as mp4/webm.",
+    "streaming_format_download_error" to "This video source uses a DASH streaming format (mpd) which is not supported for download yet. Please select mp4/webm/m3u8 sources.",
 
     "playback_speed" to "Playback Speed",
     
@@ -158,4 +159,11 @@ val enStrings: Map<String, String> = mapOf(
     "download_chunk_retry" to "Chunk %d retrying (%d/%d)...",
     "download_integrity_failed" to "File integrity check failed",
     "download_range_not_supported" to "Server does not support multi-thread download, using single-thread",
+
+    "hls_parsing_playlist" to "Parsing HLS playlist...",
+    "hls_downloading_segments" to "Downloading HLS segments (%d/%d)...",
+    "hls_merging_segments" to "Merging HLS segments...",
+    "hls_decrypting_segment" to "Decrypting segment %d...",
+    "hls_no_segments" to "No segments found in HLS playlist",
+    "hls_parse_failed" to "Failed to parse HLS playlist",
 )

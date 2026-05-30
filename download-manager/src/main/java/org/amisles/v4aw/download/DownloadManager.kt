@@ -36,7 +36,8 @@ class DownloadManager @Inject constructor(
         private const val RETRY_DELAY_MS = 2000L
         private const val FILE_SIZE_THRESHOLD_FOR_MULTI_THREAD = 2 * 1024 * 1024L
 
-        private val STREAMING_EXTENSIONS = setOf(".m3u8", ".mpd")
+        private val HLS_EXTENSIONS = setOf(".m3u8")
+        private val DASH_EXTENSIONS = setOf(".mpd")
     }
 
     private val client = OkHttpClient.Builder()
@@ -50,7 +51,7 @@ class DownloadManager @Inject constructor(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private val downloadDispatcher = Dispatchers.IO.limitedParallelism(MAX_THREAD_COUNT)
-    private val activeDownloads = ConcurrentHashMap<String, DownloadJob>()
+    private val activeDownloads = ConcurrentHashMap<String, DownloadJobBase>()
 
     private val _downloadProgress = MutableStateFlow<Map<String, DownloadInfo>>(emptyMap())
     val downloadProgress: StateFlow<Map<String, DownloadInfo>> = _downloadProgress.asStateFlow()
@@ -72,23 +73,6 @@ class DownloadManager @Inject constructor(
         thumbnailUrl: String? = null
     ) {
         scope.launch {
-            if (isStreamingFormat(videoSource)) {
-                val task = DownloadInfo(
-                    id = id,
-                    videoTitle = title,
-                    videoUrl = url,
-                    videoSource = videoSource,
-                    thumbnailUrl = thumbnailUrl,
-                    fileName = generateFileName(title, videoSource),
-                    status = DownloadStatus.FAILED,
-                    errorMessage = "Streaming format cannot be downloaded directly",
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
-                )
-                downloadDao.insertTask(task)
-                return@launch
-            }
-
             val existingTask = downloadDao.getTaskById(id)
             if (existingTask != null && existingTask.status == DownloadStatus.DOWNLOADING) {
                 return@launch
@@ -109,15 +93,27 @@ class DownloadManager @Inject constructor(
 
             downloadDao.insertTask(task)
 
-            val job = DownloadJob(
-                task = task,
-                client = client,
-                context = context,
-                downloadDao = downloadDao,
-                chunkDao = chunkDao,
-                dispatcher = downloadDispatcher,
-                onProgress = { info -> updateProgress(info) }
-            )
+            val job: DownloadJobBase = if (isHlsFormat(videoSource)) {
+                HlsDownloadJob(
+                    task = task,
+                    client = client,
+                    context = context,
+                    downloadDao = downloadDao,
+                    chunkDao = chunkDao,
+                    dispatcher = downloadDispatcher,
+                    onProgress = { info -> updateProgress(info) }
+                )
+            } else {
+                DownloadJob(
+                    task = task,
+                    client = client,
+                    context = context,
+                    downloadDao = downloadDao,
+                    chunkDao = chunkDao,
+                    dispatcher = downloadDispatcher,
+                    onProgress = { info -> updateProgress(info) }
+                )
+            }
 
             activeDownloads[id] = job
             job.start()
@@ -141,15 +137,27 @@ class DownloadManager @Inject constructor(
             val updatedTask = task.copy(status = DownloadStatus.DOWNLOADING, updatedAt = System.currentTimeMillis())
             downloadDao.updateTask(updatedTask)
 
-            val job = DownloadJob(
-                task = updatedTask,
-                client = client,
-                context = context,
-                downloadDao = downloadDao,
-                chunkDao = chunkDao,
-                dispatcher = downloadDispatcher,
-                onProgress = { info -> updateProgress(info) }
-            )
+            val job: DownloadJobBase = if (isHlsFormat(task.videoSource)) {
+                HlsDownloadJob(
+                    task = updatedTask,
+                    client = client,
+                    context = context,
+                    downloadDao = downloadDao,
+                    chunkDao = chunkDao,
+                    dispatcher = downloadDispatcher,
+                    onProgress = { info -> updateProgress(info) }
+                )
+            } else {
+                DownloadJob(
+                    task = updatedTask,
+                    client = client,
+                    context = context,
+                    downloadDao = downloadDao,
+                    chunkDao = chunkDao,
+                    dispatcher = downloadDispatcher,
+                    onProgress = { info -> updateProgress(info) }
+                )
+            }
 
             activeDownloads[id] = job
             job.start()
@@ -182,6 +190,8 @@ class DownloadManager @Inject constructor(
             if (task != null) {
                 if (deleteFile) {
                     task.filePath?.let { path -> File(path).delete() }
+                    val hlsTempDir = File(context.getExternalFilesDir(null), "Downloads${File.separator}.hls_temp${File.separator}${task.id}")
+                    if (hlsTempDir.exists()) hlsTempDir.deleteRecursively()
                 }
                 downloadDao.deleteTaskById(id)
                 chunkDao.deleteChunksByDownloadId(id)
@@ -198,6 +208,8 @@ class DownloadManager @Inject constructor(
     private fun generateFileName(title: String, url: String): String {
         val cleanTitle = title.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
         val extension = when {
+            url.contains(".m3u8", ignoreCase = true) -> "mp4"
+            url.contains(".mpd", ignoreCase = true) -> "mp4"
             url.contains(".mp4", ignoreCase = true) -> "mp4"
             url.contains(".webm", ignoreCase = true) -> "webm"
             url.contains(".flv", ignoreCase = true) -> "flv"
@@ -209,9 +221,14 @@ class DownloadManager @Inject constructor(
         return "${cleanTitle.take(50)}_${System.currentTimeMillis()}.$extension"
     }
 
-    private fun isStreamingFormat(url: String): Boolean {
+    private fun isHlsFormat(url: String): Boolean {
         val lowerUrl = url.lowercase()
-        return STREAMING_EXTENSIONS.any { lowerUrl.contains(it) }
+        return HLS_EXTENSIONS.any { lowerUrl.contains(it) }
+    }
+
+    private fun isDashFormat(url: String): Boolean {
+        val lowerUrl = url.lowercase()
+        return DASH_EXTENSIONS.any { lowerUrl.contains(it) }
     }
 
     private class DownloadJob(
@@ -222,13 +239,13 @@ class DownloadManager @Inject constructor(
         private val chunkDao: DownloadChunkDao,
         private val dispatcher: CoroutineDispatcher,
         private val onProgress: (DownloadInfo) -> Unit
-    ) {
+    ) : DownloadJobBase {
         private val isPaused = AtomicBoolean(false)
         private val isCancelled = AtomicBoolean(false)
         private val jobScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         private val totalDownloadedBytes = AtomicLong(0L)
 
-        suspend fun start() {
+        override suspend fun start() {
             try {
                 val fileInfo = getFileInfo(task.videoSource)
                 val supportsRange = fileInfo.acceptRanges && fileInfo.size > 0
@@ -279,7 +296,7 @@ class DownloadManager @Inject constructor(
             }
         }
 
-        fun pause() {
+        override fun pause() {
             isPaused.set(true)
             jobScope.cancel()
             task = task.copy(
@@ -289,7 +306,7 @@ class DownloadManager @Inject constructor(
             onProgress(task)
         }
 
-        fun cancel() {
+        override fun cancel() {
             isCancelled.set(true)
             jobScope.cancel()
         }
