@@ -24,7 +24,8 @@ class HlsDownloadJob(
     private val downloadDao: DownloadDao,
     private val chunkDao: DownloadChunkDao,
     private val dispatcher: CoroutineDispatcher,
-    private val onProgress: (DownloadInfo) -> Unit
+    private val onProgress: (DownloadInfo) -> Unit,
+    private val downloadDir: File
 ) : DownloadJobBase {
     private val isPaused = AtomicBoolean(false)
     private val isCancelled = AtomicBoolean(false)
@@ -366,6 +367,9 @@ class HlsDownloadJob(
     }
 
     private fun getDownloadDirectory(): File {
+        if (downloadDir.exists() || downloadDir.mkdirs()) {
+            return downloadDir
+        }
         val dir = File(context.getExternalFilesDir(null), "Downloads")
         if (!dir.exists()) dir.mkdirs()
         return dir

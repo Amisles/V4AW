@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,12 +51,20 @@ fun ProfileScreen(
     onNavigateToHistory: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onClearCache: () -> Unit,
-    cacheSize: String = "0 MB"
+    cacheSize: String = "0 MB",
+    downloadPath: String = "",
+    speedLimitKbps: Long = 0,
+    onDownloadPathChange: (String) -> Unit = {},
+    onResetDownloadPath: () -> Unit = {},
+    onSpeedLimitChange: (Long) -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val currentLanguage = LocalLanguage.current
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showDownloadPathDialog by remember { mutableStateOf(false) }
+    var showSpeedLimitDialog by remember { mutableStateOf(false) }
+    var downloadPathInput by remember(downloadPath) { mutableStateOf(downloadPath) }
 
     if (showClearCacheDialog) {
         AlertDialog(
@@ -136,6 +146,114 @@ fun ProfileScreen(
         )
     }
 
+    if (showDownloadPathDialog) {
+        AlertDialog(
+            onDismissRequest = { showDownloadPathDialog = false },
+            title = {
+                Text(
+                    text = strings.downloadPathSetting,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = downloadPathInput,
+                        onValueChange = { downloadPathInput = it },
+                        label = { Text(strings.downloadPathHint) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = strings.downloadPathNote,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate500
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDownloadPathChange(downloadPathInput)
+                        showDownloadPathDialog = false
+                    }
+                ) {
+                    Text(strings.confirm, color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        onResetDownloadPath()
+                        downloadPathInput = ""
+                        showDownloadPathDialog = false
+                    }) {
+                        Text(strings.resetToDefault, color = Slate500)
+                    }
+                    TextButton(onClick = { showDownloadPathDialog = false }) {
+                        Text(strings.cancel)
+                    }
+                }
+            },
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    if (showSpeedLimitDialog) {
+        val speedOptions = listOf(0L, 256L, 512L, 1024L, 2048L, 4096L, 8192L, 16384L)
+        AlertDialog(
+            onDismissRequest = { showSpeedLimitDialog = false },
+            title = {
+                Text(
+                    text = strings.speedLimitSetting,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    speedOptions.forEach { kbps ->
+                        val label = if (kbps == 0L) strings.noLimit
+                        else if (kbps >= 1024L) "${kbps / 1024} MB/s"
+                        else "$kbps KB/s"
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSpeedLimitChange(kbps)
+                                    showSpeedLimitDialog = false
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = speedLimitKbps == kbps,
+                                onClick = {
+                                    onSpeedLimitChange(kbps)
+                                    showSpeedLimitDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (speedLimitKbps == kbps) FontWeight.Bold else FontWeight.Normal,
+                                color = if (speedLimitKbps == kbps) MaterialTheme.colorScheme.primary else Slate700
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSpeedLimitDialog = false }) {
+                    Text(strings.cancel)
+                }
+            },
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -202,6 +320,22 @@ fun ProfileScreen(
                         icon = Icons.Filled.Settings,
                         title = strings.llmApiConfig,
                         onClick = onNavigateToLlmConfig
+                    )
+                    MenuDivider()
+                    MenuItemRow(
+                        icon = Icons.Filled.Folder,
+                        title = strings.downloadPathSetting,
+                        subtitle = downloadPath,
+                        onClick = { showDownloadPathDialog = true }
+                    )
+                    MenuDivider()
+                    MenuItemRow(
+                        icon = Icons.Filled.Speed,
+                        title = strings.speedLimitSetting,
+                        subtitle = if (speedLimitKbps == 0L) strings.noLimit
+                        else if (speedLimitKbps >= 1024L) "${speedLimitKbps / 1024} MB/s"
+                        else "$speedLimitKbps KB/s",
+                        onClick = { showSpeedLimitDialog = true }
                     )
                     MenuDivider()
                     MenuItemRow(
@@ -318,7 +452,8 @@ private fun MenuItemRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = subtitleColor
+                    color = subtitleColor,
+                    maxLines = 1
                 )
             }
         }

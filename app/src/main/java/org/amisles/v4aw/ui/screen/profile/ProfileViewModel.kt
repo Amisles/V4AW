@@ -11,17 +11,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.amisles.v4aw.download.DownloadManager
 import org.amisles.v4aw.i18n.Strings
 import java.io.File
 import javax.inject.Inject
 
 data class ProfileUiState(
-    val cacheSize: String = Strings.current.calculating
+    val cacheSize: String = Strings.current.calculating,
+    val downloadPath: String = "",
+    val speedLimitKbps: Long = 0
 )
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val downloadManager: DownloadManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -29,6 +33,7 @@ class ProfileViewModel @Inject constructor(
 
     init {
         refreshCacheSize()
+        refreshDownloadSettings()
     }
 
     fun refreshCacheSize() {
@@ -36,6 +41,31 @@ class ProfileViewModel @Inject constructor(
             val size = calculateCacheSize()
             _uiState.value = _uiState.value.copy(cacheSize = formatSize(size))
         }
+    }
+
+    fun refreshDownloadSettings() {
+        val path = downloadManager.customDownloadPath
+            ?: File(context.getExternalFilesDir(null), "Downloads").absolutePath
+        _uiState.value = _uiState.value.copy(
+            downloadPath = path,
+            speedLimitKbps = downloadManager.speedLimitKbps
+        )
+    }
+
+    fun setDownloadPath(path: String) {
+        downloadManager.customDownloadPath = path.ifBlank { null }
+        _uiState.value = _uiState.value.copy(downloadPath = path)
+    }
+
+    fun resetDownloadPath() {
+        downloadManager.customDownloadPath = null
+        val defaultPath = File(context.getExternalFilesDir(null), "Downloads").absolutePath
+        _uiState.value = _uiState.value.copy(downloadPath = defaultPath)
+    }
+
+    fun setSpeedLimit(kbps: Long) {
+        downloadManager.speedLimitKbps = kbps
+        _uiState.value = _uiState.value.copy(speedLimitKbps = kbps)
     }
 
     fun clearCache() {

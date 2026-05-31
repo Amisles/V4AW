@@ -104,7 +104,12 @@ fun NavGraph(
                 },
                 onNavigateToAbout = { navController.navigate(Screen.About.route) },
                 onClearCache = { profileViewModel.clearCache() },
-                cacheSize = uiState.cacheSize
+                cacheSize = uiState.cacheSize,
+                downloadPath = uiState.downloadPath,
+                speedLimitKbps = uiState.speedLimitKbps,
+                onDownloadPathChange = { profileViewModel.setDownloadPath(it) },
+                onResetDownloadPath = { profileViewModel.resetDownloadPath() },
+                onSpeedLimitChange = { profileViewModel.setSpeedLimit(it) }
             )
         }
 
