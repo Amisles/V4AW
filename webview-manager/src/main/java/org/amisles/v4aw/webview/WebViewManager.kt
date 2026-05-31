@@ -2,6 +2,9 @@ package org.amisles.v4aw.webview
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import android.webkit.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
@@ -10,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import org.amisles.v4aw.model.SearchEndpoint
 import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +22,7 @@ class WebViewManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private var webView: WebView? = null
+
     private val _capturedUrls = MutableStateFlow<List<String>>(emptyList())
     val capturedUrls: StateFlow<List<String>> = _capturedUrls
 
@@ -30,26 +35,30 @@ class WebViewManager @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var scopeJob = SupervisorJob()
+    private var scope = CoroutineScope(Dispatchers.Main + scopeJob)
 
     private var pageLoadDeferred: CompletableDeferred<Unit>? = null
 
+    private val isDestroyed = AtomicBoolean(false)
+
     companion object {
-        // Constants
+        private const val TAG = "WebViewManager"
         private const val PAGE_LOAD_DELAY_MS = 1500L
         private const val HTML_EXTRACT_DELAY_MS = 500L
         private const val LOAD_TIMEOUT_MS = 20000L
-        private const val HTML_CHUNK_SIZE = 3000
         private const val TEXT_PLAIN = "text/plain"
         private const val UTF_8 = "utf-8"
-        
-        // Ad domains
+        private const val MAX_CAPTURED_URLS = 100
+
         private val AD_DOMAINS = listOf(
             "ads.", "ad.", "doubleclick", "googlesyndication", "googleadservices",
-            "facebook", "advertisement", "tracking", "analytics", "tagmanager"
+            "facebook", "advertisement", "tracking", "analytics", "tagmanager",
+            "adservice", "adnxs", "adsrvr", "adroll", "criteo", "taboola",
+            "outbrain", "popads", "revcontent", "mgid", "zedo", "bidswitch",
+            "rubiconproject", "pubmatic", "openx", "casalemedia", "indexexchange"
         )
 
-        // Blocked media extensions
         private val BLOCKED_MEDIA_EXTENSIONS = listOf(
             ".mp4", ".webm", ".m3u8", ".mpd", ".flv", ".mov",
             ".ts", ".avi", ".mkv", ".wmv", ".m4v", ".3gp",
@@ -57,10 +66,30 @@ class WebViewManager @Inject constructor(
             ".flac", ".wma", ".m4a", ".opus"
         )
 
-        // Blocked media keywords
         private val BLOCKED_MEDIA_KEYWORDS = listOf(
             "video/", "media/", "stream/", "hls/", "dash/",
             "vod/", "playlist.m3u8", "manifest.mpd", "audio/"
+        )
+
+        private val BLOCKED_RESOURCE_EXTENSIONS = listOf(
+            ".css", ".woff", ".woff2", ".ttf", ".eot", ".otf",
+            ".svg", ".ico", ".gif", ".png", ".jpg", ".jpeg", ".webp",
+            ".bmp", ".tiff"
+        )
+
+        private val BLOCKED_RESOURCE_DOMAINS = listOf(
+            "fonts.googleapis.com", "fonts.gstatic.com",
+            "cdn.jsdelivr.net/npm", "cdnjs.cloudflare.com/ajax",
+            "unpkg.com", "rawgit.com",
+            "googleapis.com/css", "maxcdn.bootstrapcdn.com"
+        )
+
+        private val BLOCKED_THIRD_PARTY_DOMAINS = listOf(
+            "disqus.com", "addthis.com", "sharethis.com",
+            "facebook.net", "fbcdn.net", "twitter.com/i/",
+            "platform.twitter.com", "apis.google.com/js",
+            "connect.facebook.net", "staticxx.facebook.com",
+            "syndication.twitter.com", "cdn.ampproject.org"
         )
     }
 
@@ -69,8 +98,45 @@ class WebViewManager @Inject constructor(
     }
 
     @SuppressLint("SetJavaScriptEnabled")
+    fun prewarm() {
+        if (isDestroyed.get()) return
+        if (webView != null) return
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            try {
+                initialize()
+                Log.d(TAG, "WebView prewarmed successfully")
+            } catch (e: Exception) {
+                Log.w(TAG, "WebView prewarm failed: ${e.message}")
+            }
+        } else {
+            Handler(Looper.getMainLooper()).post {
+                if (isDestroyed.get() || webView != null) return@post
+                try {
+                    initialize()
+                    Log.d(TAG, "WebView prewarmed successfully")
+                } catch (e: Exception) {
+                    Log.w(TAG, "WebView prewarm failed: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun recreateScopeIfNeeded() {
+        if (!scopeJob.isActive) {
+            scopeJob.cancel()
+            scopeJob = SupervisorJob()
+            scope = CoroutineScope(Dispatchers.Main + scopeJob)
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
     fun initialize(): WebView {
-        return WebView(context.applicationContext).apply {
+        if (isDestroyed.get()) {
+            isDestroyed.set(false)
+            recreateScopeIfNeeded()
+        }
+
+        return webView ?: WebView(context.applicationContext).apply {
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
@@ -80,6 +146,19 @@ class WebViewManager @Inject constructor(
                 blockNetworkImage = true
                 setNeedInitialFocus(false)
                 userAgentString = System.getProperty("http.agent")
+                cacheMode = WebSettings.LOAD_DEFAULT
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                setSupportZoom(false)
+                builtInZoomControls = false
+                displayZoomControls = false
+                allowFileAccess = false
+                allowContentAccess = false
+                @Suppress("DEPRECATION")
+                databaseEnabled = true
+                @Suppress("DEPRECATION")
+                savePassword = false
+                @Suppress("DEPRECATION")
+                saveFormData = false
             }
 
             webViewClient = object : WebViewClient() {
@@ -95,12 +174,16 @@ class WebViewManager @Inject constructor(
 
                     if (isVideoUrl(url)) {
                         _capturedUrls.update { currentUrls ->
-                            if (currentUrls.contains(url)) currentUrls else currentUrls + url
+                            if (currentUrls.contains(url) || currentUrls.size >= MAX_CAPTURED_URLS) currentUrls else currentUrls + url
                         }
                         return emptyResponse
                     }
 
                     if (isMediaResourceToBlock(url)) {
+                        return emptyResponse
+                    }
+
+                    if (isThirdPartyResourceToBlock(url)) {
                         return emptyResponse
                     }
 
@@ -117,6 +200,7 @@ class WebViewManager @Inject constructor(
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    if (!scope.isActive) return
                     scope.launch {
                         delay(PAGE_LOAD_DELAY_MS)
                         stopCurrentLoading()
@@ -125,6 +209,12 @@ class WebViewManager @Inject constructor(
                         _isLoading.value = false
                         pageLoadDeferred?.complete(Unit)
                     }
+                }
+
+                override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                    Log.e(TAG, "WebView render process gone: crashed=${detail?.didCrash()}")
+                    recycleWebView()
+                    return true
                 }
             }
 
@@ -137,10 +227,36 @@ class WebViewManager @Inject constructor(
         }
     }
 
+    private fun recycleWebView() {
+        val wv = webView
+        webView = null
+        try {
+            wv?.apply {
+                stopLoading()
+                loadUrl("about:blank")
+                clearHistory()
+                clearCache(true)
+                destroy()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error recycling WebView: ${e.message}")
+        }
+    }
+
+    private fun getOrCreateWebView(): WebView {
+        if (isDestroyed.get()) {
+            isDestroyed.set(false)
+            recreateScopeIfNeeded()
+        }
+        return webView ?: initialize()
+    }
+
     private fun injectMediaBlocker() {
         webView?.evaluateJavascript(
             """
             (function() {
+                if (window.__v4awMediaBlockerInstalled) return;
+                window.__v4awMediaBlockerInstalled = true;
                 const originalCreateElement = document.createElement;
                 document.createElement = function(tagName) {
                     const element = originalCreateElement.call(document, tagName);
@@ -209,14 +325,13 @@ class WebViewManager @Inject constructor(
             _htmlContent.value = null
             _currentUrl.value = url
 
-            val webView = webView ?: initialize()
-            webView.loadUrl(url)
+            val wv = getOrCreateWebView()
+            wv.loadUrl(url)
         }
 
-        val timedOut = withTimeoutOrNull<Boolean>(LOAD_TIMEOUT_MS) {
+        withTimeoutOrNull(LOAD_TIMEOUT_MS) {
             pageLoadDeferred?.await()
-            true
-        } == null
+        }
 
         pageLoadDeferred = null
     }
@@ -230,8 +345,8 @@ class WebViewManager @Inject constructor(
             _htmlContent.value = null
             _currentUrl.value = url
 
-            val webView = webView ?: initialize()
-            webView.loadUrl(url)
+            val wv = getOrCreateWebView()
+            wv.loadUrl(url)
         }
     }
 
@@ -246,11 +361,10 @@ class WebViewManager @Inject constructor(
             _capturedUrls.value = emptyList()
             _htmlContent.value = null
 
-            val webView = webView ?: initialize()
+            val wv = getOrCreateWebView()
 
             val escapedQuery = escapeJsString(query)
             val escapedActionFragment = escapeJsString(endpoint.actionUrl.substringAfterLast("/").take(30))
-            val escapedQueryParam = escapeCssString(endpoint.queryParam)
 
             val jsCode = """
             (function() {
@@ -276,7 +390,7 @@ class WebViewManager @Inject constructor(
             })();
             """.trimIndent()
 
-            webView.evaluateJavascript(jsCode, null)
+            wv.evaluateJavascript(jsCode, null)
         }
 
         val timedOut = withTimeoutOrNull(LOAD_TIMEOUT_MS) {
@@ -335,6 +449,7 @@ class WebViewManager @Inject constructor(
             })();
             """.trimIndent()
         ) { html ->
+            if (!scope.isActive) return@evaluateJavascript
             scope.launch {
                 val processedHtml = html?.let { decodeJsonString(it) }
                 _htmlContent.value = processedHtml
@@ -343,56 +458,26 @@ class WebViewManager @Inject constructor(
     }
 
     private fun decodeJsonString(json: String): String {
-        if (json.length < 2) return json
-        val content = json.removeSurrounding("\"")
-        val sb = StringBuilder(content.length)
-        var i = 0
-        while (i < content.length) {
-            if (content[i] == '\\' && i + 1 < content.length) {
-                when (content[i + 1]) {
-                    '"' -> { sb.append('"'); i += 2 }
-                    '\\' -> { sb.append('\\'); i += 2 }
-                    '/' -> { sb.append('/'); i += 2 }
-                    'n' -> { sb.append('\n'); i += 2 }
-                    'r' -> { sb.append('\r'); i += 2 }
-                    't' -> { sb.append('\t'); i += 2 }
-                    'b' -> { sb.append('\b'); i += 2 }
-                    'f' -> { sb.append('\u000C'); i += 2 }
-                    'u' -> {
-                        if (i + 5 < content.length) {
-                            try {
-                                val code = content.substring(i + 2, i + 6).toInt(16)
-                                sb.append(code.toChar())
-                                i += 6
-                            } catch (_: NumberFormatException) {
-                                sb.append(content[i]); i++
-                            }
-                        } else {
-                            sb.append(content[i]); i++
-                        }
-                    }
-                    else -> { sb.append(content[i]); i++ }
-                }
-            } else {
-                sb.append(content[i]); i++
-            }
+        return try {
+            org.json.JSONArray("[$json]").getString(0)
+        } catch (_: Exception) {
+            json.removeSurrounding("\"")
         }
-        return sb.toString()
     }
 
     private fun isAdUrl(url: String): Boolean {
-        return AD_DOMAINS.any { url.contains(it, ignoreCase = true) }
+        val host = try {
+            java.net.URI(url).host?.lowercase() ?: return false
+        } catch (_: Exception) {
+            url.lowercase()
+        }
+        return AD_DOMAINS.any { domain ->
+            host == domain.removeSuffix(".") || host.endsWith(".${domain.removeSuffix(".")}")
+        }
     }
 
     private fun isVideoUrl(url: String): Boolean {
-        val hasVideoExtension = BLOCKED_MEDIA_EXTENSIONS.any {
-            url.contains(it, ignoreCase = true)
-        }
-        if (hasVideoExtension) return true
-
-        val isStreamingFormat = url.contains("m3u8", ignoreCase = true) ||
-                url.contains("mpd", ignoreCase = true)
-        if (isStreamingFormat) return true
+        if (BLOCKED_MEDIA_EXTENSIONS.any { url.contains(it, ignoreCase = true) }) return true
 
         return BLOCKED_MEDIA_KEYWORDS.any {
             url.contains(it, ignoreCase = true)
@@ -402,20 +487,20 @@ class WebViewManager @Inject constructor(
     private fun isMediaResourceToBlock(url: String): Boolean {
         val lowerUrl = url.lowercase()
 
-        if (lowerUrl.contains(".css") || lowerUrl.contains(".woff") ||
-            lowerUrl.contains(".ttf") || lowerUrl.contains(".eot")) {
+        if (BLOCKED_RESOURCE_EXTENSIONS.any { lowerUrl.contains(it) }) {
             return true
         }
 
-        if (lowerUrl.contains("fonts.googleapis.com") || lowerUrl.contains("fonts.gstatic.com")) {
-            return true
-        }
-
-        if (lowerUrl.contains("googleapis.com/css") || lowerUrl.contains("cdn.jsdelivr.net/npm")) {
+        if (BLOCKED_RESOURCE_DOMAINS.any { lowerUrl.contains(it) }) {
             return true
         }
 
         return false
+    }
+
+    private fun isThirdPartyResourceToBlock(url: String): Boolean {
+        val lowerUrl = url.lowercase()
+        return BLOCKED_THIRD_PARTY_DOMAINS.any { lowerUrl.contains(it) }
     }
 
     fun injectJsToRemoveAds() {
@@ -449,6 +534,9 @@ class WebViewManager @Inject constructor(
             .replace("\t", "\\t")
             .replace("`", "\\`")
             .replace("/", "\\/")
+            .replace("\u0000", "\\0")
+            .replace("\u2028", "\\u2028")
+            .replace("\u2029", "\\u2029")
     }
 
     private fun escapeCssString(s: String): String {
@@ -459,10 +547,24 @@ class WebViewManager @Inject constructor(
     }
 
     fun destroy() {
+        if (isDestroyed.getAndSet(true)) return
+        Log.d(TAG, "Destroying WebViewManager")
+
+        pageLoadDeferred?.cancel()
+        pageLoadDeferred = null
+
         scope.cancel()
+
         webView?.apply {
-            stopLoading()
-            destroy()
+            try {
+                stopLoading()
+                loadUrl("about:blank")
+                clearHistory()
+                clearCache(true)
+                destroy()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error destroying WebView: ${e.message}")
+            }
         }
         webView = null
     }
