@@ -103,10 +103,11 @@ val zhStrings: Map<String, String> = mapOf(
     "related_resources" to "相关资源",
     "available_sources_label" to "可用源：",
     "select_source_to_download" to "选择视频源下载",
-    "download_tip" to "💡 提示：绿色=直接下载（mp4/webm），橙色=HLS下载（m3u8），红色=暂不支持（mpd）。",
+    "download_tip" to "💡 提示：绿色=直接下载（mp4/webm），橙色=HLS下载（m3u8），蓝色=DASH下载（mpd）。",
     "no_available_sources" to "没有可用的视频源",
     "downloadable" to "可下载",
     "hls_downloadable" to "HLS可下载",
+    "dash_downloadable" to "DASH可下载",
     "streaming_format" to "流式格式（暂不支持）",
     "unknown_format" to "格式未知",
     "trying_fallback" to "正在尝试备用模式...",
@@ -127,8 +128,6 @@ val zhStrings: Map<String, String> = mapOf(
     "time_hours" to "%d小时",
     "time_minutes" to "%d分钟",
     "time_seconds" to "%d秒",
-
-    "streaming_format_download_error" to "该视频源使用DASH流式格式（mpd），暂不支持下载。请选择mp4/webm/m3u8等视频源。",
 
     "playback_speed" to "播放速度",
     
@@ -175,4 +174,27 @@ val zhStrings: Map<String, String> = mapOf(
     "search_endpoint_label" to "搜索来源：%s",
     "search_results" to "搜索结果",
     "back_to_original" to "返回原页面",
+
+    "streaming_format_download_error" to "该视频源使用DASH流式格式（mpd），暂不支持下载。请选择mp4/webm/m3u8等视频源。",
+
+    "dash_parsing_manifest" to "正在解析DASH清单...",
+    "dash_downloading_video" to "正在下载DASH视频轨道 (%d/%d)...",
+    "dash_downloading_audio" to "正在下载DASH音频轨道 (%d/%d)...",
+    "dash_merging_media" to "正在合并DASH音视频...",
+    "dash_no_video_track" to "DASH清单中未找到视频轨道",
+    "dash_no_audio_track" to "DASH清单中未找到音频轨道",
+    "dash_parse_failed" to "DASH清单解析失败",
+    "dash_merge_failed" to "DASH音视频合并失败",
+
+    "download_path_setting" to "下载路径",
+    "download_path_hint" to "输入下载保存路径",
+    "download_path_note" to "留空使用默认路径，请确保应用有该目录的读写权限",
+    "reset_to_default" to "恢复默认",
+    "speed_limit_setting" to "下载限速",
+    "no_limit" to "不限速",
+
+    "download_complete_notification" to "下载完成",
+    "download_failed_notification" to "下载失败",
+    "download_channel_name" to "下载通知",
+    "download_channel_description" to "下载任务状态通知",
 )

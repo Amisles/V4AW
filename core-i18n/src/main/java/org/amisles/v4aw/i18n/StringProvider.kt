@@ -178,6 +178,28 @@ interface StringProvider {
     val searchResults get() = get(StringKey.SEARCH_RESULTS)
     val backToOriginal get() = get(StringKey.BACK_TO_ORIGINAL)
 
+    val dashDownloadable get() = get(StringKey.DASH_DOWNLOADABLE)
+    val dashParsingManifest get() = get(StringKey.DASH_PARSING_MANIFEST)
+    val dashDownloadingVideo get() = get(StringKey.DASH_DOWNLOADING_VIDEO)
+    val dashDownloadingAudio get() = get(StringKey.DASH_DOWNLOADING_AUDIO)
+    val dashMergingMedia get() = get(StringKey.DASH_MERGING_MEDIA)
+    val dashNoVideoTrack get() = get(StringKey.DASH_NO_VIDEO_TRACK)
+    val dashNoAudioTrack get() = get(StringKey.DASH_NO_AUDIO_TRACK)
+    val dashParseFailed get() = get(StringKey.DASH_PARSE_FAILED)
+    val dashMergeFailed get() = get(StringKey.DASH_MERGE_FAILED)
+
+    val downloadPathSetting get() = get(StringKey.DOWNLOAD_PATH_SETTING)
+    val downloadPathHint get() = get(StringKey.DOWNLOAD_PATH_HINT)
+    val downloadPathNote get() = get(StringKey.DOWNLOAD_PATH_NOTE)
+    val resetToDefault get() = get(StringKey.RESET_TO_DEFAULT)
+    val speedLimitSetting get() = get(StringKey.SPEED_LIMIT_SETTING)
+    val noLimit get() = get(StringKey.NO_LIMIT)
+
+    val downloadCompleteNotification get() = get(StringKey.DOWNLOAD_COMPLETE_NOTIFICATION)
+    val downloadFailedNotification get() = get(StringKey.DOWNLOAD_FAILED_NOTIFICATION)
+    val downloadChannelName get() = get(StringKey.DOWNLOAD_CHANNEL_NAME)
+    val downloadChannelDescription get() = get(StringKey.DOWNLOAD_CHANNEL_DESCRIPTION)
+
     fun s(key: String): String = get(key)
 }
 

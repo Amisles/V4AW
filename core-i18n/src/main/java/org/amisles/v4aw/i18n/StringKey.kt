@@ -174,4 +174,26 @@ object StringKey {
     const val SEARCH_ENDPOINT_LABEL = "search_endpoint_label"
     const val SEARCH_RESULTS = "search_results"
     const val BACK_TO_ORIGINAL = "back_to_original"
+
+    const val DASH_DOWNLOADABLE = "dash_downloadable"
+    const val DASH_PARSING_MANIFEST = "dash_parsing_manifest"
+    const val DASH_DOWNLOADING_VIDEO = "dash_downloading_video"
+    const val DASH_DOWNLOADING_AUDIO = "dash_downloading_audio"
+    const val DASH_MERGING_MEDIA = "dash_merging_media"
+    const val DASH_NO_VIDEO_TRACK = "dash_no_video_track"
+    const val DASH_NO_AUDIO_TRACK = "dash_no_audio_track"
+    const val DASH_PARSE_FAILED = "dash_parse_failed"
+    const val DASH_MERGE_FAILED = "dash_merge_failed"
+
+    const val DOWNLOAD_PATH_SETTING = "download_path_setting"
+    const val DOWNLOAD_PATH_HINT = "download_path_hint"
+    const val DOWNLOAD_PATH_NOTE = "download_path_note"
+    const val RESET_TO_DEFAULT = "reset_to_default"
+    const val SPEED_LIMIT_SETTING = "speed_limit_setting"
+    const val NO_LIMIT = "no_limit"
+
+    const val DOWNLOAD_COMPLETE_NOTIFICATION = "download_complete_notification"
+    const val DOWNLOAD_FAILED_NOTIFICATION = "download_failed_notification"
+    const val DOWNLOAD_CHANNEL_NAME = "download_channel_name"
+    const val DOWNLOAD_CHANNEL_DESCRIPTION = "download_channel_description"
 }
