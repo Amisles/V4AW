@@ -305,6 +305,7 @@ fun DownloadDialog(
                             }
                             val isDownloadable = isDownloadableSource(source)
                             val isHls = isHlsSource(source)
+                            val isDash = isDashSource(source)
                             val isStreaming = isStreamingSource(source)
                             
                             Card(
@@ -320,6 +321,8 @@ fun DownloadDialog(
                                     containerColor = if (isDownloadable) {
                                         if (isHls) {
                                             androidx.compose.ui.graphics.Color(0xFFFFF8E1)
+                                        } else if (isDash) {
+                                            androidx.compose.ui.graphics.Color(0xFFE3F2FD)
                                         } else {
                                             androidx.compose.ui.graphics.Color(0xFFE8F5E9)
                                         }
@@ -355,6 +358,19 @@ fun DownloadDialog(
                                                     text = strings.hlsDownloadable,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = androidx.compose.ui.graphics.Color(0xFFFF9800)
+                                                )
+                                            } else if (isDash) {
+                                                Icon(
+                                                    Icons.Default.Download,
+                                                    contentDescription = strings.dashDownloadable,
+                                                    tint = androidx.compose.ui.graphics.Color(0xFF1976D2),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = strings.dashDownloadable,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = androidx.compose.ui.graphics.Color(0xFF1976D2)
                                                 )
                                             } else {
                                                 Icon(
@@ -415,7 +431,7 @@ fun DownloadDialog(
 
 private fun isDownloadableSource(url: String): Boolean {
     val lowerUrl = url.lowercase()
-    val downloadableExtensions = listOf(".mp4", ".webm", ".flv", ".mov", ".ts", ".m4v", ".m3u8")
+    val downloadableExtensions = listOf(".mp4", ".webm", ".flv", ".mov", ".ts", ".m4v", ".m3u8", ".mpd")
     return downloadableExtensions.any { lowerUrl.contains(it) }
 }
 
@@ -423,10 +439,12 @@ private fun isHlsSource(url: String): Boolean {
     return url.lowercase().contains(".m3u8")
 }
 
+private fun isDashSource(url: String): Boolean {
+    return url.lowercase().contains(".mpd")
+}
+
 private fun isStreamingSource(url: String): Boolean {
-    val lowerUrl = url.lowercase()
-    val streamingExtensions = listOf(".mpd")
-    return streamingExtensions.any { lowerUrl.contains(it) }
+    return false
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
