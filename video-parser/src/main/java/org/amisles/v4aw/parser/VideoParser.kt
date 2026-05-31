@@ -3,14 +3,17 @@ package org.amisles.v4aw.parser
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.amisles.v4aw.model.VideoEntry
+import org.amisles.v4aw.model.SearchEndpoint
 
 @Singleton
 class VideoParser @Inject constructor() {
 
     companion object {
+        private const val TAG = "VideoParser"
         // Constants
         private const val MAX_HTML_LOG_LENGTH = 150
         private const val MAX_VIDEO_ENTRIES = 20
@@ -127,13 +130,18 @@ class VideoParser @Inject constructor() {
             "sharethis", "bluetrafficstream", "stripchat",
             "pop", "popup", "banner", "promo", "sponsor"
         )
+
+        private val SEARCH_URL_PATTERN = Regex("""['"`](https?://[^'"`\s]*(?:/search|/api/search|/api/query|/s\?)[^'"`\s]*)['"`]""")
+        private val SEARCH_URL_ASSIGNMENT_PATTERN = Regex("""url\s*[:=]\s*['"`]([^'"`\s]*(?:search|query)[^'"`\s]*)['"`]""")
+        private val SEARCH_GET_PATTERN = Regex("""\.get\(\s*['"`]([^'"`\s]*(?:search|query)[^'"`\s]*)['"`]""")
     }
 
     data class ParseResult(
         val videoSources: List<String>,
         val videoEntries: List<VideoEntry>,
         val iframeUrls: List<String>,
-        val title: String
+        val title: String,
+        val searchEndpoints: List<SearchEndpoint> = emptyList()
     )
 
     private data class ParsedPage(
@@ -223,15 +231,18 @@ class VideoParser @Inject constructor() {
             }
 
             val videoEntries = extractVideoEntries(parsed.doc, baseUrl)
+            val searchEndpoints = extractSearchEndpoints(parsed.doc, baseUrl)
 
             return ParseResult(
                 videoSources = videoSources,
                 videoEntries = videoEntries,
                 iframeUrls = iframeEntries,
-                title = parsed.title
+                title = parsed.title,
+                searchEndpoints = searchEndpoints
             )
         } catch (e: Exception) {
-            return ParseResult(emptyList(), emptyList(), emptyList(), "Error")
+            Log.e(TAG, "parseAll: failed to parse HTML", e)
+            return ParseResult(emptyList(), emptyList(), emptyList(), "Error", emptyList())
         }
     }
 
@@ -239,6 +250,227 @@ class VideoParser @Inject constructor() {
         val doc = Jsoup.parse(decodedHtml)
         val title = doc.select("title").text().ifEmpty { UNKNOWN_VIDEO_TITLE }
         return ParsedPage(doc, title)
+    }
+
+    private fun extractSearchEndpoints(doc: Document, baseUrl: String?): List<SearchEndpoint> {
+        val endpoints = mutableListOf<SearchEndpoint>()
+        val seenKeys = mutableSetOf<String>()
+
+        extractSearchForms(doc, baseUrl, endpoints, seenKeys)
+        extractSearchInputs(doc, baseUrl, endpoints, seenKeys)
+        extractSearchApisFromScripts(doc, baseUrl, endpoints, seenKeys)
+        extractSearchNavLinks(doc, baseUrl, endpoints, seenKeys)
+
+        if (endpoints.isNotEmpty()) {
+            Log.d(TAG, "[extractSearchEndpoints] Found ${endpoints.size} search endpoint(s) from: $baseUrl")
+            endpoints.forEachIndexed { index, ep ->
+                Log.d(TAG, "  [$index] method=${ep.method}, actionUrl=${ep.actionUrl}, queryParam=${ep.queryParam}, placeholder=${ep.placeholder}")
+            }
+        } else {
+            Log.d(TAG, "[extractSearchEndpoints] No search endpoints found from: $baseUrl")
+        }
+
+        return endpoints
+    }
+
+    private fun extractSearchForms(
+        doc: Document,
+        baseUrl: String?,
+        endpoints: MutableList<SearchEndpoint>,
+        seenKeys: MutableSet<String>
+    ) {
+        doc.select("form").forEach { form ->
+            val action = form.attr("action").ifEmpty { baseUrl ?: "" }
+            val absoluteAction = makeAbsoluteUrl(action, baseUrl)
+            val method = form.attr("method").ifEmpty { "GET" }.uppercase()
+
+            val searchInput = findSearchInput(form) ?: return@forEach
+
+            val queryParam = searchInput.attr("name").ifEmpty { "q" }
+            val placeholder = searchInput.attr("placeholder").ifEmpty { null }
+
+            val extraParams = mutableMapOf<String, String>()
+            form.select("input[type=hidden]").forEach { hidden ->
+                val name = hidden.attr("name")
+                val value = hidden.attr("value")
+                if (name.isNotEmpty() && name != queryParam) {
+                    extraParams[name] = value
+                }
+            }
+
+            val dedupeKey = absoluteAction + "|" + queryParam
+            if (seenKeys.add(dedupeKey)) {
+                Log.d(TAG, "[extractSearchForms] Found search form: method=$method, action=$absoluteAction, queryParam=$queryParam, placeholder=$placeholder")
+                endpoints.add(SearchEndpoint(
+                    actionUrl = absoluteAction,
+                    method = method,
+                    queryParam = queryParam,
+                    extraParams = extraParams,
+                    placeholder = placeholder,
+                    sourceUrl = baseUrl ?: ""
+                ))
+            }
+        }
+    }
+
+    private fun extractSearchInputs(
+        doc: Document,
+        baseUrl: String?,
+        endpoints: MutableList<SearchEndpoint>,
+        seenKeys: MutableSet<String>
+    ) {
+        doc.select("[role=search] input, [class*=search-box] input, [id*=search-box] input, [class*=searchbar] input, [id*=searchbar] input")
+            .forEach { input ->
+                val form = input.closest("form")
+                if (form != null) return@forEach
+
+                val queryParam = input.attr("name").ifEmpty { "q" }
+                val placeholder = input.attr("placeholder").ifEmpty { null }
+                val dedupeKey = (baseUrl ?: "") + "|" + queryParam
+                if (seenKeys.add(dedupeKey)) {
+                    Log.d(TAG, "[extractSearchInputs] Found standalone search input: queryParam=$queryParam, placeholder=$placeholder, baseUrl=$baseUrl")
+                    endpoints.add(SearchEndpoint(
+                        actionUrl = baseUrl ?: "",
+                        method = "GET",
+                        queryParam = queryParam,
+                        placeholder = placeholder,
+                        sourceUrl = baseUrl ?: ""
+                    ))
+                }
+            }
+    }
+
+    private fun extractSearchApisFromScripts(
+        doc: Document,
+        baseUrl: String?,
+        endpoints: MutableList<SearchEndpoint>,
+        seenKeys: MutableSet<String>
+    ) {
+        doc.select(SCRIPT_TAG).forEach { script ->
+            val content = script.html()
+            val searchUrlPatterns = listOf(
+                SEARCH_URL_PATTERN,
+                SEARCH_URL_ASSIGNMENT_PATTERN,
+                SEARCH_GET_PATTERN
+            )
+
+            searchUrlPatterns.forEach { pattern ->
+                pattern.findAll(content).forEach { match ->
+                    val apiUrl = match.groupValues[1]
+                    val absoluteUrl = makeAbsoluteUrl(apiUrl, baseUrl)
+                    val queryParam = inferSearchQueryParam(apiUrl) ?: return@forEach
+                    val dedupeKey = absoluteUrl + "|" + queryParam
+                    if (seenKeys.add(dedupeKey)) {
+                        Log.d(TAG, "[extractSearchApisFromScripts] Found search API: url=$absoluteUrl, queryParam=$queryParam")
+                        endpoints.add(SearchEndpoint(
+                            actionUrl = absoluteUrl,
+                            method = "GET",
+                            queryParam = queryParam,
+                            sourceUrl = baseUrl ?: ""
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun extractSearchNavLinks(
+        doc: Document,
+        baseUrl: String?,
+        endpoints: MutableList<SearchEndpoint>,
+        seenKeys: MutableSet<String>
+    ) {
+        if (endpoints.isNotEmpty()) return
+
+        val SEARCH_PATH_KEYWORDS = listOf("/search", "/s?", "/find", "/query", "/so")
+        val baseUrlHost = try { baseUrl?.let { java.net.URL(it).host } } catch (_: Exception) { null }
+
+        for (link in doc.select("$ANCHOR_TAG[$HREF_ATTR]")) {
+            val href = link.attr(HREF_ATTR)
+            if (href.isEmpty()) continue
+
+            val absoluteUrl = makeAbsoluteUrl(href, baseUrl)
+            if (absoluteUrl.isEmpty()) continue
+
+            val pathContainsSearch = SEARCH_PATH_KEYWORDS.any {
+                absoluteUrl.contains(it, ignoreCase = true)
+            }
+            if (!pathContainsSearch) continue
+
+            val url = try { java.net.URL(absoluteUrl) } catch (_: Exception) { continue }
+
+            if (baseUrlHost != null && url.host != baseUrlHost) continue
+
+            val query = url.query ?: ""
+
+            if (query.isNotEmpty()) {
+                val firstParamKey = query.split(AMPERSAND)
+                    .firstOrNull()
+                    ?.substringBefore(EQUALS_SIGN)
+                    ?.takeIf { it.isNotEmpty() && it !in IGNORE_PARAMS }
+                    ?: continue
+
+                val actionUrl = "${url.protocol}://${url.authority}${url.path}"
+                val dedupeKey = actionUrl + VERTICAL_BAR + firstParamKey
+
+                if (seenKeys.add(dedupeKey)) {
+                    Log.d(TAG, "[extractSearchNavLinks] Found search nav link with params: actionUrl=$actionUrl, queryParam=$firstParamKey")
+                    endpoints.add(SearchEndpoint(
+                        actionUrl = actionUrl,
+                        method = "GET",
+                        queryParam = firstParamKey,
+                        sourceUrl = baseUrl ?: ""
+                    ))
+                }
+                return
+            } else {
+                val dedupeKey = absoluteUrl + VERTICAL_BAR
+                if (seenKeys.add(dedupeKey)) {
+                    Log.d(TAG, "[extractSearchNavLinks] Found search page link (deferred discovery): actionUrl=$absoluteUrl")
+                    endpoints.add(SearchEndpoint(
+                        actionUrl = absoluteUrl,
+                        method = "GET",
+                        queryParam = EMPTY_STRING,
+                        sourceUrl = baseUrl ?: ""
+                    ))
+                }
+                return
+            }
+        }
+    }
+
+    private fun findSearchInput(form: Element): Element? {
+        val searchInputSelectors = listOf(
+            "input[type=search]",
+            "input[name*=search]", "input[name*=query]", "input[name*=keyword]",
+            "input[name*=q]", "input[name=wd]", "input[name=word]", "input[name=kw]",
+            "input[id*=search]", "input[id*=query]",
+            "input[placeholder*=search]", "input[placeholder*=Search]",
+            "input[role=search]"
+        )
+
+        searchInputSelectors.forEach { selector ->
+            form.selectFirst(selector)?.let { return it }
+        }
+
+        val placeholderPatterns = listOf("搜索", "查找", "找", "搜")
+        form.select("input[type=text]").forEach { input ->
+            val ph = input.attr("placeholder").lowercase()
+            if (placeholderPatterns.any { ph.contains(it) }) {
+                return input
+            }
+        }
+
+        return null
+    }
+
+    private fun inferSearchQueryParam(url: String): String? {
+        val searchParams = listOf("q", "keyword", "search", "query", "wd", "key", "word", "kw", "s")
+        searchParams.forEach { param ->
+            if (url.contains("?$param=") || url.contains("&$param=")) return param
+        }
+        if (url.contains("/search") || url.contains("/query") || url.contains("/s?")) return "q"
+        return null
     }
 
     private fun extractVideoEntries(doc: Document, baseUrl: String?): List<VideoEntry> {
@@ -255,12 +487,10 @@ class VideoParser @Inject constructor() {
             }
 
             val absoluteUrl = makeAbsoluteUrl(href, baseUrl)
-            // Filter out current page link
             if (absoluteUrl == baseUrl) {
                 return@forEachIndexed
             }
 
-            // Check if URL already exists to avoid duplicate object creation
             if (urlSet.contains(absoluteUrl)) {
                 return@forEachIndexed
             }
@@ -279,7 +509,6 @@ class VideoParser @Inject constructor() {
         }
 
         doc.select("$DIV_TAG[$CLASS_ATTR*=$VIDEO_INDICATOR], $DIV_TAG[$CLASS_ATTR*=item], $LI_TAG[$CLASS_ATTR*=$VIDEO_INDICATOR], $ARTICLE_TAG").forEach { container ->
-            // Modified parseVideoContainer call to avoid unnecessary object creation
             val href = container.selectFirst(ANCHOR_TAG)?.attr(HREF_ATTR) ?: return@forEach
             val absoluteUrl = makeAbsoluteUrl(href, baseUrl)
             
@@ -292,7 +521,6 @@ class VideoParser @Inject constructor() {
                 return@forEach
             }
             
-            // Create object only after confirming validity
             val title = extractTitleFromLink(container, absoluteUrl)
             val thumbnail = extractThumbnailFromLink(container)
             val videoEntry = VideoEntry(title = title, url = absoluteUrl, thumbnailUrl = thumbnail)
@@ -306,41 +534,35 @@ class VideoParser @Inject constructor() {
             entries
         }
 
-        if (patternMatched.size < MIN_GROUP_SIZE_FOR_HEURISTIC && urlPattern != null) {
-            val heuristicEntries = discoverPatternsHeuristically(doc, baseUrl, urlPattern)
-            heuristicEntries.forEach { heuristicEntry ->
-                if (!urlSet.contains(heuristicEntry.url)) {
-                    urlSet.add(heuristicEntry.url)
-                    entries.add(heuristicEntry)
-                }
-            }
+        if (patternMatched.size >= MIN_GROUP_SIZE_FOR_HEURISTIC) {
+            val sortedEntries = patternMatched.distinctBy { it.url }
+                .sortedWith(compareByDescending<VideoEntry> { it.thumbnailUrl != null }
+                    .thenByDescending { !it.title.startsWith("http") }
+                    .thenByDescending { it.title.length > 10 })
+            
+            return sortedEntries.take(MAX_VIDEO_ENTRIES)
+        }
 
-            val reMatched = entries.filter { urlPattern.matches(it.url) }
-
-            if (reMatched.size > patternMatched.size) {
-                val sortedEntries = reMatched.distinctBy { it.url }
-                    .sortedWith(compareByDescending<VideoEntry> { it.thumbnailUrl != null }
-                        .thenByDescending { !it.title.startsWith("http") }
-                        .thenByDescending { it.title.length > 10 })
-                
-                val finalEntries = sortedEntries.take(MAX_VIDEO_ENTRIES)
-                return finalEntries
+        val heuristicEntries = discoverPatternsHeuristically(doc, baseUrl, urlPattern)
+        heuristicEntries.forEach { heuristicEntry ->
+            if (!urlSet.contains(heuristicEntry.url)) {
+                urlSet.add(heuristicEntry.url)
+                entries.add(heuristicEntry)
             }
         }
 
-        val sortedEntries = patternMatched.distinctBy { it.url }
+        val sortedEntries = entries.distinctBy { it.url }
             .sortedWith(compareByDescending<VideoEntry> { it.thumbnailUrl != null }
                 .thenByDescending { !it.title.startsWith("http") }
                 .thenByDescending { it.title.length > 10 })
         
-        val finalEntries = sortedEntries.take(MAX_VIDEO_ENTRIES)
-        return finalEntries
+        return sortedEntries.take(MAX_VIDEO_ENTRIES)
     }
 
     private fun discoverPatternsHeuristically(
         doc: Document,
         baseUrl: String?,
-        currentPattern: UrlPattern
+        currentPattern: UrlPattern?
     ): List<VideoEntry> {
         val entries = mutableListOf<VideoEntry>()
         val allHrefs = doc.select(ANCHOR_TAG)
@@ -354,7 +576,7 @@ class VideoParser @Inject constructor() {
 
             try {
                 val url = java.net.URL(resolvedUrl)
-                if (url.host != currentPattern.host) return@forEach
+                if (currentPattern != null && url.host != currentPattern.host) return@forEach
 
                 val segments = url.path.split("/").filter { it.isNotEmpty() }
                 val pathKey = if (segments.size > 1) {
@@ -378,13 +600,18 @@ class VideoParser @Inject constructor() {
 
                 val groupKey = "$pathKey$VERTICAL_BAR$queryKey"
                 patternGroups.getOrPut(groupKey) { mutableListOf() }.add(resolvedUrl)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "discoverPatternsHeuristically: failed to parse URL $resolvedUrl", e)
             }
+        }
+
+        val currentPatternKey = currentPattern?.let {
+            "${it.pathPrefix}$VERTICAL_BAR${it.queryKeys.sorted().joinToString(AMPERSAND)}"
         }
 
         val bestGroup = patternGroups.entries
             .filter { it.value.size >= MIN_GROUP_SIZE_FOR_HEURISTIC }
-            .filter { it.key != "${currentPattern.pathPrefix}$VERTICAL_BAR${currentPattern.queryKeys.sorted().joinToString(AMPERSAND)}" }
+            .filter { currentPatternKey == null || it.key != currentPatternKey }
             .maxByOrNull { it.value.size }
 
         if (bestGroup != null) {
@@ -450,6 +677,7 @@ class VideoParser @Inject constructor() {
 
             return pattern
         } catch (e: Exception) {
+            Log.w(TAG, "extractUrlPattern: failed for $baseUrl", e)
         }
         return null
     }
@@ -538,7 +766,8 @@ class VideoParser @Inject constructor() {
                     return lastSegment
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "extractReadableTitleFromUrl: failed for $url", e)
         }
         
         return url
@@ -625,7 +854,8 @@ class VideoParser @Inject constructor() {
         baseUrl?.let {
             try {
                 return java.net.URL(java.net.URL(it), url).toString()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "makeAbsoluteUrl: failed to resolve $url against $it", e)
             }
         }
         return if (url.startsWith("//")) "https:$url" else EMPTY_STRING
@@ -717,6 +947,7 @@ class VideoParser @Inject constructor() {
                 }
             }
         } catch (e: Exception) {
+            Log.w(TAG, "extractVideoUrlFromIframe: failed for $iframeSrc", e)
         }
         
         return null
@@ -759,8 +990,6 @@ class VideoParser @Inject constructor() {
             return false
         }
 
-        val hasValidExtension = VALID_VIDEO_EXTENSIONS.any { lowerUrl.contains(it) }
-
         val hasVideoIndicator = lowerUrl.contains(VIDEO_INDICATOR) ||
                 lowerUrl.contains(HLS_INDICATOR) ||
                 lowerUrl.contains(DASH_INDICATOR) ||
@@ -770,7 +999,7 @@ class VideoParser @Inject constructor() {
                 lowerUrl.contains(VOD_INDICATOR) ||
                 lowerUrl.contains(CDN_INDICATOR)
 
-        return hasValidExtension || hasVideoIndicator
+        return hasVideoExtension || hasVideoIndicator
     }
 
     fun selectBestSource(sources: List<String>): String? {

@@ -165,4 +165,13 @@ object StringKey {
     const val HLS_DECRYPTING_SEGMENT = "hls_decrypting_segment"
     const val HLS_NO_SEGMENTS = "hls_no_segments"
     const val HLS_PARSE_FAILED = "hls_parse_failed"
+
+    const val SITE_SEARCH = "site_search"
+    const val SEARCH_HINT = "search_hint"
+    const val SEARCH_BUTTON = "search_button"
+    const val SEARCHING = "searching"
+    const val SEARCH_NO_RESULT = "search_no_result"
+    const val SEARCH_ENDPOINT_LABEL = "search_endpoint_label"
+    const val SEARCH_RESULTS = "search_results"
+    const val BACK_TO_ORIGINAL = "back_to_original"
 }

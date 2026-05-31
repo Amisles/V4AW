@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.amisles.v4aw.parser.VideoParser
 import org.amisles.v4aw.webview.WebViewManager
+import org.amisles.v4aw.model.SearchEndpoint
 import org.amisles.v4aw.model.VideoInfo
 import org.amisles.v4aw.model.ParseResult
 import org.amisles.v4aw.domain.repository.VideoRepository
@@ -31,6 +32,8 @@ class VideoRepositoryImpl @Inject constructor(
         private const val PARSE_END_MARKER = "========== PARSE END =========="
         private const val ENABLE_VERBOSE_LOGGING = false
     }
+
+    private val searchEndpointCache = mutableMapOf<String, SearchEndpoint>()
 
     override suspend fun parseVideoUrl(url: String): ParseResult {
         val totalStart = System.currentTimeMillis()
@@ -87,7 +90,15 @@ class VideoRepositoryImpl @Inject constructor(
 
             val jsoupSources = parseResult?.videoSources ?: emptyList()
             val videoEntries = parseResult?.videoEntries ?: emptyList()
+            val searchEndpoints = parseResult?.searchEndpoints ?: emptyList()
             val allSources = capturedUrls + jsoupSources
+
+            if (searchEndpoints.isNotEmpty()) {
+                Log.i(TAG, "[FLOW] Discovered ${searchEndpoints.size} search endpoint(s) from: $url")
+                searchEndpoints.forEachIndexed { i, ep ->
+                    Log.i(TAG, "[FLOW-SEARCH-$i] method=${ep.method}, action=${ep.actionUrl}, queryParam=${ep.queryParam}")
+                }
+            }
 
             Log.i(TAG, "[FLOW] All sources before validation: ${allSources.size}")
             if (ENABLE_VERBOSE_LOGGING) {
@@ -111,18 +122,20 @@ class VideoRepositoryImpl @Inject constructor(
 
             val totalElapsed = System.currentTimeMillis() - totalStart
             Log.i(TAG, "[FLOW] Total: ${totalElapsed}ms (web: ${webElapsed}ms, parse: ${parseElapsed}ms)")
-            Log.i(TAG, "[FLOW] RESULT: validSources=${validSources.size}, entries=${videoEntries.size}")
+            Log.i(TAG, "[FLOW] RESULT: validSources=${validSources.size}, entries=${videoEntries.size}, searchEndpoints=${searchEndpoints.size}")
             Log.i(TAG, PARSE_END_MARKER)
 
-            return if (validSources.isNotEmpty() || videoEntries.isNotEmpty()) {
+            return if (validSources.isNotEmpty() || videoEntries.isNotEmpty() || searchEndpoints.isNotEmpty()) {
                 ParseResult.Success(
                     VideoInfo(
                         title = title,
                         url = url,
                         videoSources = validSources.distinct(),
-                        videoEntries = videoEntries.distinctBy { it.url }
+                        videoEntries = videoEntries.distinctBy { it.url },
+                        searchEndpoints = searchEndpoints
                     ),
-                    videoEntries = videoEntries.distinctBy { it.url }
+                    videoEntries = videoEntries.distinctBy { it.url },
+                    searchEndpoints = searchEndpoints
                 )
             } else {
                 Log.w(TAG, "[FLOW] No valid video sources found after processing")
@@ -151,11 +164,93 @@ class VideoRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun searchViaPost(endpoint: SearchEndpoint, query: String): ParseResult {
+        return try {
+            webViewManager.submitSearchForm(endpoint, query)
+            val htmlContent = webViewManager.htmlContent.value
+            val capturedUrls = webViewManager.capturedUrls.value
+            val currentUrl = webViewManager.currentUrl.value ?: endpoint.actionUrl
+
+            val parseResult = tryParseHtml(htmlContent, currentUrl)
+
+            val jsoupSources = parseResult?.videoSources ?: emptyList()
+            val videoEntries = parseResult?.videoEntries ?: emptyList()
+            val searchEndpoints = parseResult?.searchEndpoints ?: emptyList()
+            val allSources = capturedUrls + jsoupSources
+
+            val validSources = withContext(Dispatchers.Default) {
+                allSources.filter { videoParser.validateVideoUrl(it) }.distinct()
+            }
+
+            val title = parseResult?.title ?: DEFAULT_VIDEO_TITLE
+
+            if (validSources.isNotEmpty() || videoEntries.isNotEmpty() || searchEndpoints.isNotEmpty()) {
+                ParseResult.Success(
+                    VideoInfo(
+                        title = title,
+                        url = currentUrl,
+                        videoSources = validSources.distinct(),
+                        videoEntries = videoEntries.distinctBy { it.url },
+                        searchEndpoints = searchEndpoints
+                    ),
+                    videoEntries = videoEntries.distinctBy { it.url },
+                    searchEndpoints = searchEndpoints
+                )
+            } else {
+                ParseResult.Error(NO_VIDEO_SOURCES_ERROR_MESSAGE)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "[searchViaPost] Error: ${e.message}", e)
+            ParseResult.Error("Error: ${e.message}")
+        }
+    }
+
     override suspend fun getVideoSource(videoInfo: VideoInfo): String? {
         return try {
             videoParser.selectBestSource(videoInfo.videoSources)
         } catch (e: Exception) {
             Log.e(TAG, "[getVideoSource] Error selecting best source: ${e.message}", e)
+            null
+        }
+    }
+
+    override suspend fun discoverSearchEndpoint(searchPageUrl: String): SearchEndpoint? {
+        searchEndpointCache[searchPageUrl]?.let {
+            Log.d(TAG, "[discoverSearchEndpoint] Cache hit for: $searchPageUrl")
+            return it
+        }
+
+        Log.d(TAG, "[discoverSearchEndpoint] Loading search page to discover form: $searchPageUrl")
+
+        return try {
+            val result = parseVideoUrl(searchPageUrl)
+
+            if (result is ParseResult.Success) {
+                val discovered = result.videoInfo.searchEndpoints.firstOrNull { ep ->
+                    ep.queryParam.isNotEmpty()
+                }
+
+                if (discovered != null) {
+                    Log.d(TAG, "[discoverSearchEndpoint] Discovered endpoint: actionUrl=${discovered.actionUrl}, queryParam=${discovered.queryParam}")
+                    searchEndpointCache[searchPageUrl] = discovered
+                    return discovered
+                }
+
+                val guessed = SearchEndpoint(
+                    actionUrl = searchPageUrl,
+                    method = "GET",
+                    queryParam = "q",
+                    sourceUrl = searchPageUrl
+                )
+                Log.d(TAG, "[discoverSearchEndpoint] No form found, falling back to guessed endpoint: queryParam=q")
+                searchEndpointCache[searchPageUrl] = guessed
+                return guessed
+            } else {
+                Log.w(TAG, "[discoverSearchEndpoint] Failed to load search page: $searchPageUrl")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "[discoverSearchEndpoint] Error: ${e.message}", e)
             null
         }
     }

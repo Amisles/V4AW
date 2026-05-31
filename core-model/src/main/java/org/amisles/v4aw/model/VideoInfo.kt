@@ -11,6 +11,7 @@ data class VideoInfo(
     val url: String = "",
     val videoSources: List<String> = emptyList(),
     val videoEntries: List<VideoEntry> = emptyList(),
+    val searchEndpoints: List<SearchEndpoint> = emptyList(),
     val thumbnailUrl: String? = null,
     val duration: Long? = null,
     val createdAt: Long = System.currentTimeMillis()

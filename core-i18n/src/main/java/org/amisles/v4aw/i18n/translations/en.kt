@@ -166,4 +166,13 @@ val enStrings: Map<String, String> = mapOf(
     "hls_decrypting_segment" to "Decrypting segment %d...",
     "hls_no_segments" to "No segments found in HLS playlist",
     "hls_parse_failed" to "Failed to parse HLS playlist",
+
+    "site_search" to "Site Search",
+    "search_hint" to "Enter keywords to search this site",
+    "search_button" to "Search",
+    "searching" to "Searching...",
+    "search_no_result" to "No results found",
+    "search_endpoint_label" to "Search from: %s",
+    "search_results" to "Search Results",
+    "back_to_original" to "Back to Original",
 )

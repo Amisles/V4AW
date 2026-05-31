@@ -166,4 +166,13 @@ val zhStrings: Map<String, String> = mapOf(
     "hls_decrypting_segment" to "正在解密分片 %d...",
     "hls_no_segments" to "HLS播放列表中未找到分片",
     "hls_parse_failed" to "HLS播放列表解析失败",
+
+    "site_search" to "站内搜索",
+    "search_hint" to "输入关键词搜索该网站",
+    "search_button" to "搜索",
+    "searching" to "搜索中...",
+    "search_no_result" to "未找到搜索结果",
+    "search_endpoint_label" to "搜索来源：%s",
+    "search_results" to "搜索结果",
+    "back_to_original" to "返回原页面",
 )

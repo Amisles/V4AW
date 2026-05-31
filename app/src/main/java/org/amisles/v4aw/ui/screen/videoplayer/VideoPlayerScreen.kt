@@ -40,6 +40,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import org.amisles.v4aw.R
 import org.amisles.v4aw.model.VideoEntry
+import org.amisles.v4aw.model.SearchEndpoint
 import org.amisles.v4aw.model.VideoInfo
 import org.amisles.v4aw.i18n.LocalStrings
 import org.amisles.v4aw.ui.screen.downloads.DownloadsViewModel
@@ -201,7 +202,8 @@ fun VideoPlayerScreen(
                     playerViewRef?.let { pv ->
                         if (pv.isControllerFullyVisible) pv.hideController() else pv.showController()
                     }
-                }
+                },
+                onRestoreOriginalEntries = { viewModel.restoreOriginalEntries() }
             )
         }
     }
@@ -510,7 +512,8 @@ private fun NormalPlayerView(
     onShowSpeedDialog: () -> Unit,
     onShowAbLoopDialog: () -> Unit,
     onPlayerViewCreated: (PlayerView) -> Unit,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    onRestoreOriginalEntries: () -> Unit
 ) {
     val strings = LocalStrings.current
     val isLocalVideo = videoInfo.videoSources.any { it.startsWith("file://") } || 
@@ -670,35 +673,84 @@ private fun NormalPlayerView(
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 )
 
-                if (currentVideoInfo.videoEntries.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
+                if (currentVideoInfo.searchEndpoints.isNotEmpty()) {
+                    SiteSearchCard(
+                        searchEndpoints = currentVideoInfo.searchEndpoints,
+                        isSearching = uiState.isSearching,
+                        errorMessage = uiState.searchErrorMessage,
+                        onSearch = { endpoint, query ->
+                            viewModel.searchSite(endpoint, query)
+                        }
+                    )
+                }
 
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        color = Slate50,
-                        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp)
+                if (currentVideoInfo.videoEntries.isNotEmpty() || uiState.isSearchResultMode) {
+                    val displayEntries = if (uiState.isSearchResultMode) {
+                        currentVideoInfo.videoEntries
+                    } else {
+                        currentVideoInfo.videoEntries
+                    }
+
+                    if (displayEntries.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            color = Slate50,
+                            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
                         ) {
-                            Text(
-                                text = strings.relatedResources,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = Slate800,
-                                modifier = Modifier.padding(bottom = 16.dp)
-                            )
-
-                            LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            Column(
+                                modifier = Modifier.padding(12.dp)
                             ) {
-                                items(currentVideoInfo.videoEntries) { entry ->
-                                    VideoEntryItem(
-                                        entry = entry,
-                                        onClick = { onParseVideoEntry(entry) }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (uiState.isSearchResultMode) {
+                                        IconButton(
+                                            onClick = onRestoreOriginalEntries,
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.AutoMirrored.Filled.ArrowBack,
+                                                contentDescription = strings.backToOriginal,
+                                                tint = Slate800,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+
+                                    Text(
+                                        text = if (uiState.isSearchResultMode) strings.searchResults else strings.relatedResources,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Slate800
                                     )
+
+                                    if (uiState.isSearchResultMode) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "(${displayEntries.size})",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Slate500
+                                        )
+                                    }
+                                }
+
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(displayEntries) { entry ->
+                                        VideoEntryItem(
+                                            entry = entry,
+                                            onClick = { onParseVideoEntry(entry) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1038,4 +1090,115 @@ private fun AbLoopDialog(
             }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SiteSearchCard(
+    searchEndpoints: List<SearchEndpoint>,
+    isSearching: Boolean,
+    errorMessage: String?,
+    onSearch: (SearchEndpoint, String) -> Unit
+) {
+    val strings = LocalStrings.current
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedEndpointIndex by remember { mutableIntStateOf(0) }
+    val selectedEndpoint = searchEndpoints.getOrElse(selectedEndpointIndex) { searchEndpoints.firstOrNull() }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = Slate50),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = strings.siteSearch,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Slate800
+            )
+
+            if (searchEndpoints.size > 1) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    searchEndpoints.forEachIndexed { index, endpoint ->
+                        val isSelected = index == selectedEndpointIndex
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedEndpointIndex = index },
+                            label = {
+                                Text(
+                                    text = try {
+                                        java.net.URL(endpoint.actionUrl).host
+                                    } catch (_: Exception) {
+                                        endpoint.actionUrl.take(30)
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = {
+                        Text(
+                            text = selectedEndpoint?.placeholder ?: strings.searchHint,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    enabled = !isSearching,
+                    shape = RoundedCornerShape(16.dp)
+                )
+
+                Button(
+                    onClick = {
+                        if (searchQuery.isNotBlank() && selectedEndpoint != null) {
+                            onSearch(selectedEndpoint, searchQuery.trim())
+                        }
+                    },
+                    enabled = !isSearching && searchQuery.isNotBlank() && selectedEndpoint != null,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    if (isSearching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(strings.searchButton, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
 }

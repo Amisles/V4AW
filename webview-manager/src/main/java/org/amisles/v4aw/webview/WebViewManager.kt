@@ -7,6 +7,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import org.amisles.v4aw.model.SearchEndpoint
 import java.io.ByteArrayInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,6 +23,9 @@ class WebViewManager @Inject constructor(
 
     private val _htmlContent = MutableStateFlow<String?>(null)
     val htmlContent: StateFlow<String?> = _htmlContent
+
+    private val _currentUrl = MutableStateFlow<String?>(null)
+    val currentUrl: StateFlow<String?> = _currentUrl
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -89,9 +94,8 @@ class WebViewManager @Inject constructor(
                     }
 
                     if (isVideoUrl(url)) {
-                        val currentUrls = _capturedUrls.value
-                        if (!currentUrls.contains(url)) {
-                            _capturedUrls.value = currentUrls + url
+                        _capturedUrls.update { currentUrls ->
+                            if (currentUrls.contains(url)) currentUrls else currentUrls + url
                         }
                         return emptyResponse
                     }
@@ -105,6 +109,9 @@ class WebViewManager @Inject constructor(
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     super.onPageStarted(view, url, favicon)
+                    if (url != null) {
+                        _currentUrl.value = url
+                    }
                     injectMediaBlocker()
                 }
 
@@ -200,6 +207,7 @@ class WebViewManager @Inject constructor(
             _isLoading.value = true
             _capturedUrls.value = emptyList()
             _htmlContent.value = null
+            _currentUrl.value = url
 
             val webView = webView ?: initialize()
             webView.loadUrl(url)
@@ -220,10 +228,67 @@ class WebViewManager @Inject constructor(
             _isLoading.value = true
             _capturedUrls.value = emptyList()
             _htmlContent.value = null
+            _currentUrl.value = url
 
             val webView = webView ?: initialize()
             webView.loadUrl(url)
         }
+    }
+
+    suspend fun submitSearchForm(endpoint: SearchEndpoint, query: String) {
+        pageLoadDeferred?.cancel()
+        pageLoadDeferred = CompletableDeferred()
+
+        withContext(Dispatchers.Main) {
+            stopCurrentLoading()
+
+            _isLoading.value = true
+            _capturedUrls.value = emptyList()
+            _htmlContent.value = null
+
+            val webView = webView ?: initialize()
+
+            val escapedQuery = escapeJsString(query)
+            val escapedActionFragment = escapeJsString(endpoint.actionUrl.substringAfterLast("/").take(30))
+            val escapedQueryParam = escapeCssString(endpoint.queryParam)
+
+            val jsCode = """
+            (function() {
+                var forms = document.querySelectorAll('form');
+                for (var i = 0; i < forms.length; i++) {
+                    var form = forms[i];
+                    var action = form.getAttribute('action') || window.location.href;
+                    var formAction = action;
+                    ${if (endpoint.actionUrl.isNotEmpty()) "if (formAction.indexOf('$escapedActionFragment') === -1) continue;" else ""}
+                    
+                    var inputs = form.querySelectorAll('input');
+                    for (var j = 0; j < inputs.length; j++) {
+                        if (inputs[j].name === '${escapeJsString(endpoint.queryParam)}') {
+                            inputs[j].value = "$escapedQuery";
+                            form.submit();
+                            return true;
+                        }
+                    }
+                }
+                
+                window.location.href = "${escapeJsString(endpoint.actionUrl)}?${escapeJsString(endpoint.queryParam)}=${java.net.URLEncoder.encode(query, "UTF-8")}";
+                return true;
+            })();
+            """.trimIndent()
+
+            webView.evaluateJavascript(jsCode, null)
+        }
+
+        val timedOut = withTimeoutOrNull(LOAD_TIMEOUT_MS) {
+            pageLoadDeferred?.await()
+            false
+        } == null
+
+        if (timedOut) {
+            _isLoading.value = false
+        }
+
+        pageLoadDeferred = null
     }
 
     fun stopCurrentLoading() {
@@ -271,10 +336,48 @@ class WebViewManager @Inject constructor(
             """.trimIndent()
         ) { html ->
             scope.launch {
-                val processedHtml = html?.removeSurrounding("\"")?.replace("\\\"", "\"")
+                val processedHtml = html?.let { decodeJsonString(it) }
                 _htmlContent.value = processedHtml
             }
         }
+    }
+
+    private fun decodeJsonString(json: String): String {
+        if (json.length < 2) return json
+        val content = json.removeSurrounding("\"")
+        val sb = StringBuilder(content.length)
+        var i = 0
+        while (i < content.length) {
+            if (content[i] == '\\' && i + 1 < content.length) {
+                when (content[i + 1]) {
+                    '"' -> { sb.append('"'); i += 2 }
+                    '\\' -> { sb.append('\\'); i += 2 }
+                    '/' -> { sb.append('/'); i += 2 }
+                    'n' -> { sb.append('\n'); i += 2 }
+                    'r' -> { sb.append('\r'); i += 2 }
+                    't' -> { sb.append('\t'); i += 2 }
+                    'b' -> { sb.append('\b'); i += 2 }
+                    'f' -> { sb.append('\u000C'); i += 2 }
+                    'u' -> {
+                        if (i + 5 < content.length) {
+                            try {
+                                val code = content.substring(i + 2, i + 6).toInt(16)
+                                sb.append(code.toChar())
+                                i += 6
+                            } catch (_: NumberFormatException) {
+                                sb.append(content[i]); i++
+                            }
+                        } else {
+                            sb.append(content[i]); i++
+                        }
+                    }
+                    else -> { sb.append(content[i]); i++ }
+                }
+            } else {
+                sb.append(content[i]); i++
+            }
+        }
+        return sb.toString()
     }
 
     private fun isAdUrl(url: String): Boolean {
@@ -335,6 +438,24 @@ class WebViewManager @Inject constructor(
 
     fun getCurrentCapturedUrls(): List<String> {
         return _capturedUrls.value
+    }
+
+    private fun escapeJsString(s: String): String {
+        return s.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("'", "\\'")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+            .replace("`", "\\`")
+            .replace("/", "\\/")
+    }
+
+    private fun escapeCssString(s: String): String {
+        return s.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("'", "\\'")
+            .replace("\n", "\\a")
     }
 
     fun destroy() {

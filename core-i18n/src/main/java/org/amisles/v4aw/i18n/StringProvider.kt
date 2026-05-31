@@ -169,6 +169,15 @@ interface StringProvider {
     val hlsNoSegments get() = get(StringKey.HLS_NO_SEGMENTS)
     val hlsParseFailed get() = get(StringKey.HLS_PARSE_FAILED)
 
+    val siteSearch get() = get(StringKey.SITE_SEARCH)
+    val searchHint get() = get(StringKey.SEARCH_HINT)
+    val searchButton get() = get(StringKey.SEARCH_BUTTON)
+    val searching get() = get(StringKey.SEARCHING)
+    val searchNoResult get() = get(StringKey.SEARCH_NO_RESULT)
+    val searchEndpointLabel get() = get(StringKey.SEARCH_ENDPOINT_LABEL)
+    val searchResults get() = get(StringKey.SEARCH_RESULTS)
+    val backToOriginal get() = get(StringKey.BACK_TO_ORIGINAL)
+
     fun s(key: String): String = get(key)
 }
 

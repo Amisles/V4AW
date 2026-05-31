@@ -24,9 +24,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.amisles.v4aw.model.VideoEntry
+import org.amisles.v4aw.model.SearchEndpoint
 import org.amisles.v4aw.model.VideoInfo
 import org.amisles.v4aw.domain.usecase.GetVideoSourceUseCase
 import org.amisles.v4aw.domain.usecase.ParseVideoUrlUseCase
+import org.amisles.v4aw.domain.usecase.SearchUseCase
 import org.amisles.v4aw.model.ParseResult
 import org.amisles.v4aw.i18n.Strings
 import org.amisles.v4aw.player.PictureInPictureManager
@@ -44,7 +46,12 @@ data class VideoPlayerUiState(
     val isInPictureInPicture: Boolean = false,
     val abLoopA: Long? = null,
     val abLoopB: Long? = null,
-    val isAbLoopActive: Boolean = false
+    val isAbLoopActive: Boolean = false,
+    val isSearching: Boolean = false,
+    val searchErrorMessage: String? = null,
+    val originalVideoEntries: List<VideoEntry> = emptyList(),
+    val originalSearchEndpoints: List<SearchEndpoint> = emptyList(),
+    val isSearchResultMode: Boolean = false
 )
 
 @UnstableApi
@@ -53,6 +60,7 @@ class VideoPlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val getVideoSourceUseCase: GetVideoSourceUseCase,
     private val parseVideoUrlUseCase: ParseVideoUrlUseCase,
+    private val searchUseCase: SearchUseCase,
     private val pipManager: PictureInPictureManager
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(VideoPlayerUiState())
@@ -86,7 +94,12 @@ class VideoPlayerViewModel @Inject constructor(
             if (videoInfo.videoSources.isEmpty()) {
                 parseAndPlayVideo(videoInfo.url, videoInfo.title)
             } else {
-                _uiState.value = _uiState.value.copy(videoInfo = videoInfo)
+                _uiState.value = _uiState.value.copy(
+                    videoInfo = videoInfo,
+                    originalVideoEntries = videoInfo.videoEntries,
+                    originalSearchEndpoints = videoInfo.searchEndpoints,
+                    isSearchResultMode = false
+                )
                 playVideoFromInfo(videoInfo)
             }
         }
@@ -109,8 +122,16 @@ class VideoPlayerViewModel @Inject constructor(
             
             _uiState.value = _uiState.value.copy(
                 videoInfo = fullVideoInfo,
-                isLoading = false
+                isLoading = false,
+                isSearchResultMode = false
             )
+
+            if (!_uiState.value.isSearchResultMode) {
+                _uiState.value = _uiState.value.copy(
+                    originalVideoEntries = fullVideoInfo.videoEntries,
+                    originalSearchEndpoints = fullVideoInfo.searchEndpoints
+                )
+            }
             
             playVideoFromInfo(fullVideoInfo)
         } else {
@@ -342,6 +363,47 @@ class VideoPlayerViewModel @Inject constructor(
         }
     }
     
+    fun searchSite(endpoint: SearchEndpoint, query: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isSearching = true,
+                searchErrorMessage = null
+            )
+
+            val result = searchUseCase(endpoint, query)
+
+            if (result is ParseResult.Success) {
+                val fullVideoInfo = result.videoInfo
+
+                _uiState.value = _uiState.value.copy(
+                    videoInfo = fullVideoInfo,
+                    isSearching = false,
+                    searchErrorMessage = null,
+                    isSearchResultMode = true
+                )
+
+                playVideoFromInfo(fullVideoInfo)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isSearching = false,
+                    searchErrorMessage = (result as? ParseResult.Error)?.message ?: Strings.current.searchNoResult
+                )
+            }
+        }
+    }
+
+    fun restoreOriginalEntries() {
+        val currentVideoInfo = _uiState.value.videoInfo ?: return
+        _uiState.value = _uiState.value.copy(
+            videoInfo = currentVideoInfo.copy(
+                videoEntries = _uiState.value.originalVideoEntries,
+                searchEndpoints = _uiState.value.originalSearchEndpoints
+            ),
+            isSearchResultMode = false,
+            searchErrorMessage = null
+        )
+    }
+
     fun clearAbLoop() {
         abLoopJob?.cancel()
         abLoopJob = null

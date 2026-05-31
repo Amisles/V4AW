@@ -3,7 +3,8 @@ package org.amisles.v4aw.model
 sealed class ParseResult {
     data class Success(
         val videoInfo: VideoInfo,
-        val videoEntries: List<VideoEntry> = emptyList()
+        val videoEntries: List<VideoEntry> = emptyList(),
+        val searchEndpoints: List<SearchEndpoint> = emptyList()
     ) : ParseResult()
     data class Error(val message: String) : ParseResult()
     object Loading : ParseResult()
