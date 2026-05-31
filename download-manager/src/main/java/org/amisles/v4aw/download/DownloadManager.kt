@@ -1,7 +1,12 @@
 package org.amisles.v4aw.download
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -38,6 +43,105 @@ class DownloadManager @Inject constructor(
 
         private val HLS_EXTENSIONS = setOf(".m3u8")
         private val DASH_EXTENSIONS = setOf(".mpd")
+
+        private const val NOTIFICATION_CHANNEL_ID = "download_channel"
+        private const val NOTIFICATION_ID_PREFIX = 1000
+
+        const val PREFS_NAME = "download_prefs"
+        const val KEY_DOWNLOAD_PATH = "download_path"
+        const val KEY_SPEED_LIMIT_KBPS = "speed_limit_kbps"
+        const val DEFAULT_SPEED_LIMIT_KBPS = 0L
+    }
+
+    private val downloadPrefs by lazy {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    var speedLimitKbps: Long
+        get() = downloadPrefs.getLong(KEY_SPEED_LIMIT_KBPS, DEFAULT_SPEED_LIMIT_KBPS)
+        set(value) = downloadPrefs.edit().putLong(KEY_SPEED_LIMIT_KBPS, value).apply()
+
+    var customDownloadPath: String?
+        get() = downloadPrefs.getString(KEY_DOWNLOAD_PATH, null)
+        set(value) = downloadPrefs.edit().putString(KEY_DOWNLOAD_PATH, value).apply()
+
+    fun getEffectiveDownloadDir(): File {
+        val customPath = customDownloadPath
+        if (customPath != null) {
+            val dir = File(customPath)
+            if (dir.exists() || dir.mkdirs()) {
+                return dir
+            }
+        }
+        val dir = File(context.getExternalFilesDir(null), "Downloads")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    private val notificationManager by lazy {
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    }
+
+    private fun createNotificationChannel() {
+        val channel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            "Downloads",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Download progress notifications"
+            setShowBadge(true)
+        }
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    private fun showCompletionNotification(task: DownloadInfo) {
+        try {
+            createNotificationChannel()
+            val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle(task.videoTitle)
+                .setContentText("Download completed")
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .build()
+            notificationManager.notify(NOTIFICATION_ID_PREFIX + task.id.hashCode(), notification)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to show download notification: ${e.message}")
+        }
+    }
+
+    private fun showFailedNotification(task: DownloadInfo) {
+        try {
+            createNotificationChannel()
+            val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.stat_notify_error)
+                .setContentTitle(task.videoTitle)
+                .setContentText("Download failed: ${task.errorMessage}")
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .build()
+            notificationManager.notify(NOTIFICATION_ID_PREFIX + task.id.hashCode(), notification)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to show download notification: ${e.message}")
+        }
+    }
+
+    private fun buildRateLimitedClient(): OkHttpClient {
+        val limitKbps = speedLimitKbps
+        return if (limitKbps > 0) {
+            client.newBuilder()
+                .readTimeout(60, TimeUnit.SECONDS)
+                .addInterceptor { chain ->
+                    val originalResponse = chain.proceed(chain.request())
+                    val limitBytesPerSec = limitKbps * 1024
+                    originalResponse.newBuilder()
+                        .body(RateLimitedResponseBody(originalResponse.body!!, limitBytesPerSec))
+                        .build()
+                }
+                .build()
+        } else {
+            client
+        }
     }
 
     private val client = OkHttpClient.Builder()
@@ -93,25 +197,39 @@ class DownloadManager @Inject constructor(
 
             downloadDao.insertTask(task)
 
-            val job: DownloadJobBase = if (isHlsFormat(videoSource)) {
-                HlsDownloadJob(
+            val effectiveClient = buildRateLimitedClient()
+            val effectiveDir = getEffectiveDownloadDir()
+
+            val job: DownloadJobBase = when {
+                isHlsFormat(videoSource) -> HlsDownloadJob(
                     task = task,
-                    client = client,
+                    client = effectiveClient,
                     context = context,
                     downloadDao = downloadDao,
                     chunkDao = chunkDao,
                     dispatcher = downloadDispatcher,
-                    onProgress = { info -> updateProgress(info) }
+                    onProgress = { info -> updateProgress(info) },
+                    downloadDir = effectiveDir
                 )
-            } else {
-                DownloadJob(
+                isDashFormat(videoSource) -> DashDownloadJob(
                     task = task,
-                    client = client,
+                    client = effectiveClient,
                     context = context,
                     downloadDao = downloadDao,
                     chunkDao = chunkDao,
                     dispatcher = downloadDispatcher,
-                    onProgress = { info -> updateProgress(info) }
+                    onProgress = { info -> updateProgress(info) },
+                    downloadDir = effectiveDir
+                )
+                else -> DownloadJob(
+                    task = task,
+                    client = effectiveClient,
+                    context = context,
+                    downloadDao = downloadDao,
+                    chunkDao = chunkDao,
+                    dispatcher = downloadDispatcher,
+                    onProgress = { info -> updateProgress(info) },
+                    downloadDir = effectiveDir
                 )
             }
 
@@ -137,25 +255,39 @@ class DownloadManager @Inject constructor(
             val updatedTask = task.copy(status = DownloadStatus.DOWNLOADING, updatedAt = System.currentTimeMillis())
             downloadDao.updateTask(updatedTask)
 
-            val job: DownloadJobBase = if (isHlsFormat(task.videoSource)) {
-                HlsDownloadJob(
+            val effectiveClient = buildRateLimitedClient()
+            val effectiveDir = getEffectiveDownloadDir()
+
+            val job: DownloadJobBase = when {
+                isHlsFormat(task.videoSource) -> HlsDownloadJob(
                     task = updatedTask,
-                    client = client,
+                    client = effectiveClient,
                     context = context,
                     downloadDao = downloadDao,
                     chunkDao = chunkDao,
                     dispatcher = downloadDispatcher,
-                    onProgress = { info -> updateProgress(info) }
+                    onProgress = { info -> updateProgress(info) },
+                    downloadDir = effectiveDir
                 )
-            } else {
-                DownloadJob(
+                isDashFormat(task.videoSource) -> DashDownloadJob(
                     task = updatedTask,
-                    client = client,
+                    client = effectiveClient,
                     context = context,
                     downloadDao = downloadDao,
                     chunkDao = chunkDao,
                     dispatcher = downloadDispatcher,
-                    onProgress = { info -> updateProgress(info) }
+                    onProgress = { info -> updateProgress(info) },
+                    downloadDir = effectiveDir
+                )
+                else -> DownloadJob(
+                    task = updatedTask,
+                    client = effectiveClient,
+                    context = context,
+                    downloadDao = downloadDao,
+                    chunkDao = chunkDao,
+                    dispatcher = downloadDispatcher,
+                    onProgress = { info -> updateProgress(info) },
+                    downloadDir = effectiveDir
                 )
             }
 
@@ -192,6 +324,8 @@ class DownloadManager @Inject constructor(
                     task.filePath?.let { path -> File(path).delete() }
                     val hlsTempDir = File(context.getExternalFilesDir(null), "Downloads${File.separator}.hls_temp${File.separator}${task.id}")
                     if (hlsTempDir.exists()) hlsTempDir.deleteRecursively()
+                    val dashTempDir = File(context.getExternalFilesDir(null), "Downloads${File.separator}.dash_temp${File.separator}${task.id}")
+                    if (dashTempDir.exists()) dashTempDir.deleteRecursively()
                 }
                 downloadDao.deleteTaskById(id)
                 chunkDao.deleteChunksByDownloadId(id)
@@ -202,6 +336,11 @@ class DownloadManager @Inject constructor(
     private fun updateProgress(info: DownloadInfo) {
         scope.launch {
             downloadDao.updateTask(info)
+            if (info.status == DownloadStatus.COMPLETED) {
+                showCompletionNotification(info)
+            } else if (info.status == DownloadStatus.FAILED) {
+                showFailedNotification(info)
+            }
         }
     }
 
@@ -238,7 +377,8 @@ class DownloadManager @Inject constructor(
         private val downloadDao: DownloadDao,
         private val chunkDao: DownloadChunkDao,
         private val dispatcher: CoroutineDispatcher,
-        private val onProgress: (DownloadInfo) -> Unit
+        private val onProgress: (DownloadInfo) -> Unit,
+        private val downloadDir: File
     ) : DownloadJobBase {
         private val isPaused = AtomicBoolean(false)
         private val isCancelled = AtomicBoolean(false)
@@ -611,6 +751,9 @@ class DownloadManager @Inject constructor(
         }
 
         private fun getDownloadDirectory(): File {
+            if (downloadDir.exists() || downloadDir.mkdirs()) {
+                return downloadDir
+            }
             val dir = File(context.getExternalFilesDir(null), "Downloads")
             if (!dir.exists()) {
                 dir.mkdirs()
