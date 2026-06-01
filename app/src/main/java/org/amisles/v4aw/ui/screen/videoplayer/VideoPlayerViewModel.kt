@@ -2,6 +2,7 @@ package org.amisles.v4aw.ui.screen.videoplayer
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
@@ -143,11 +144,17 @@ class VideoPlayerViewModel @Inject constructor(
     }
     
     private suspend fun playVideoFromInfo(videoInfo: VideoInfo) {
+        Log.i(TAG, "[PLAY] Available sources: ${videoInfo.videoSources.size}")
+        videoInfo.videoSources.forEachIndexed { i, src ->
+            Log.i(TAG, "[PLAY-SRC-$i] ${src.take(200)}")
+        }
         val videoUrl = getVideoSourceUseCase(videoInfo)
         if (videoUrl != null) {
+            Log.i(TAG, "[PLAY] Selected URL for playback: ${videoUrl.take(200)}")
             currentUrl = videoUrl
             setupOrUpdatePlayer(videoUrl)
         } else {
+            Log.w(TAG, "[PLAY] No playable source found from ${videoInfo.videoSources.size} sources")
             _uiState.value = _uiState.value.copy(
                 errorMessage = Strings.current.noPlayableSource,
                 availableSources = videoInfo.videoSources
@@ -246,6 +253,7 @@ class VideoPlayerViewModel @Inject constructor(
     }
     
     fun playVideo(url: String) {
+        Log.i(TAG, "[PLAY] User selected URL for playback: ${url.take(200)}")
         currentUrl = url
         setupOrUpdatePlayer(url)
     }
@@ -417,5 +425,9 @@ class VideoPlayerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         releasePlayer()
+    }
+
+    companion object {
+        private const val TAG = "VideoPlayerVM"
     }
 }
