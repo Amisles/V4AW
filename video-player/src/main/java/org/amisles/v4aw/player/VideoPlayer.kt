@@ -15,50 +15,63 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class VideoPlayerState(
-    val player: ExoPlayer? = null,
-    val errorMessage: String? = null,
-    val isPlaying: Boolean = false
-)
-
-@UnstableApi @Singleton
+@UnstableApi
+@Singleton
 class VideoPlayer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val _uiState = MutableStateFlow(VideoPlayerState())
-    val uiState: StateFlow<VideoPlayerState> = _uiState.asStateFlow()
-    
+    interface ErrorListener {
+        fun onTryingFallback()
+        fun onPlaybackError(rawMessage: String, availableSources: List<String>)
+    }
+
     private var player: ExoPlayer? = null
     private var playerListener: Player.Listener? = null
     private var isReleasing = false
-    
+    private var errorListener: ErrorListener? = null
+    private var currentAvailableSources: List<String> = emptyList()
+
     private val httpDataSourceFactory: HttpDataSource.Factory = DefaultHttpDataSource.Factory()
         .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .setConnectTimeoutMs(15000)
         .setReadTimeoutMs(15000)
         .setAllowCrossProtocolRedirects(true)
-    
+
     private val dataSourceFactory: DefaultDataSource.Factory = DefaultDataSource.Factory(context, httpDataSourceFactory)
-    
-    fun playVideo(url: String) {
-        stopCurrentPlayback()
+
+    fun getExoPlayer(): ExoPlayer? = player
+
+    fun playVideo(url: String, availableSources: List<String> = emptyList()) {
+        currentAvailableSources = availableSources
         setupOrUpdatePlayer(url)
     }
-    
+
     fun stopCurrentPlayback() {
         player?.let { existingPlayer ->
             existingPlayer.stop()
             existingPlayer.clearMediaItems()
         }
-        _uiState.value = _uiState.value.copy(player = null)
     }
-    
+
+    fun setPlaybackSpeed(speed: Float) {
+        player?.setPlaybackSpeed(speed)
+    }
+
+    fun seekTo(positionMs: Long) {
+        player?.seekTo(positionMs)
+    }
+
+    fun getCurrentPosition(): Long = player?.currentPosition ?: 0L
+
+    fun getDuration(): Long = player?.duration ?: 0L
+
+    fun setErrorListener(listener: ErrorListener?) {
+        errorListener = listener
+    }
+
     private fun setupOrUpdatePlayer(url: String) {
         val currentPlayer = player ?: run {
             ExoPlayer.Builder(context)
@@ -69,38 +82,32 @@ class VideoPlayer @Inject constructor(
                         override fun onPlayerError(error: PlaybackException) {
                             handlePlaybackError(error, url)
                         }
-                        
-                        override fun onIsPlayingChanged(isPlaying: Boolean) {
-                            _uiState.value = _uiState.value.copy(isPlaying = isPlaying)
-                        }
                     }
                     newPlayer.addListener(playerListener!!)
                     player = newPlayer
                 }
         }
-        
+
         currentPlayer.stop()
         currentPlayer.clearMediaItems()
-        
+
         val mediaSource = createMediaSource(url)
         currentPlayer.setMediaSource(mediaSource)
         currentPlayer.prepare()
         currentPlayer.play()
-        
-        _uiState.value = _uiState.value.copy(player = currentPlayer)
     }
-    
+
     private fun handlePlaybackError(error: PlaybackException, url: String) {
         if (isReleasing) return
-        
+
         val lowerUrl = url.lowercase()
-        
+
         val fallbackSources = mutableListOf<MediaSource>()
-        
+
         if (lowerUrl.contains(".m3u8")) {
             fallbackSources.add(createProgressiveMediaSource(url))
         }
-        
+
         if (fallbackSources.isNotEmpty()) {
             player?.let { currentPlayer ->
                 if (isReleasing) return
@@ -109,19 +116,21 @@ class VideoPlayer @Inject constructor(
                 currentPlayer.setMediaSource(fallbackSources.first())
                 currentPlayer.prepare()
                 currentPlayer.play()
+                errorListener?.onTryingFallback()
                 return
             }
         }
-        
-        _uiState.value = _uiState.value.copy(
-            errorMessage = error.message
+
+        errorListener?.onPlaybackError(
+            rawMessage = error.message ?: "Unknown error",
+            availableSources = currentAvailableSources
         )
     }
-    
+
     private fun createMediaSource(url: String): MediaSource {
         val mediaItem = MediaItem.fromUri(url)
         val lowerUrl = url.lowercase()
-        
+
         return when {
             lowerUrl.contains(".m3u8") -> {
                 HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
@@ -134,17 +143,15 @@ class VideoPlayer @Inject constructor(
             }
         }
     }
-    
+
     private fun createProgressiveMediaSource(url: String): MediaSource {
         val mediaItem = MediaItem.fromUri(url)
         return ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
     }
-    
+
     fun release() {
         isReleasing = true
-        
-        _uiState.value = _uiState.value.copy(player = null)
-        
+
         player?.let { currentPlayer ->
             try {
                 currentPlayer.stop()
@@ -161,6 +168,7 @@ class VideoPlayer @Inject constructor(
             }
         }
         player = null
+        currentAvailableSources = emptyList()
         isReleasing = false
     }
 }
