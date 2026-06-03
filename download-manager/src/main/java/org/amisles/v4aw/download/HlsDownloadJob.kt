@@ -278,9 +278,28 @@ class HlsDownloadJob(
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         cipher.init(Cipher.DECRYPT_MODE, secretKey, iv)
 
-        val encryptedData = file.readBytes()
-        val decryptedData = cipher.doFinal(encryptedData)
-        file.writeBytes(decryptedData)
+        val tempFile = File(file.parentFile, "${file.name}.temp")
+        
+        file.inputStream().use { inputStream ->
+            javax.crypto.CipherInputStream(inputStream, cipher).use { cipherInputStream ->
+                tempFile.outputStream().use { outputStream ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    var bytesRead: Int
+                    
+                    while (cipherInputStream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead)
+                    }
+                }
+            }
+        }
+        
+        if (!file.delete()) {
+            throw IllegalStateException("Failed to delete original encrypted file: ${file.absolutePath}")
+        }
+        
+        if (!tempFile.renameTo(file)) {
+            throw IllegalStateException("Failed to rename temp file to original: ${tempFile.absolutePath}")
+        }
     }
 
     private fun fetchEncryptionKey(keyUrl: String): ByteArray? {

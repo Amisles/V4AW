@@ -30,7 +30,6 @@ fun VideoPlayerScreen(
     val downloadsViewModel: DownloadsViewModel = hiltViewModel()
     val context = LocalContext.current
     val activity = context as? Activity
-    var hasInitialized by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showAbLoopDialog by remember { mutableStateOf(false) }
@@ -46,10 +45,7 @@ fun VideoPlayerScreen(
     BackHandler(onBack = handleNavigateBack)
 
     LaunchedEffect(videoInfo) {
-        if (!hasInitialized) {
-            hasInitialized = true
-            viewModel.initializePlayer(videoInfo)
-        }
+        viewModel.initializePlayer(videoInfo)
     }
 
     DisposableEffect(Unit) {
@@ -121,18 +117,19 @@ fun VideoPlayerScreen(
     }
 
     if (showDownloadDialog) {
+        val currentVideoInfo = uiState.videoInfo ?: videoInfo
         DownloadDialog(
-            videoInfo = videoInfo,
-            availableSources = uiState.availableSources.ifEmpty { videoInfo.videoSources },
+            videoInfo = currentVideoInfo,
+            availableSources = uiState.availableSources.ifEmpty { currentVideoInfo.videoSources },
             onDismiss = { showDownloadDialog = false },
             onDownload = { source ->
                 val id = "download_${System.currentTimeMillis()}"
                 downloadsViewModel.startDownload(
                     id = id,
-                    title = videoInfo.title,
-                    url = videoInfo.url,
+                    title = currentVideoInfo.title,
+                    url = currentVideoInfo.url,
                     videoSourceUrl = source,
-                    thumbnailUrl = videoInfo.thumbnailUrl
+                    thumbnailUrl = currentVideoInfo.thumbnailUrl
                 )
                 showDownloadDialog = false
             }
