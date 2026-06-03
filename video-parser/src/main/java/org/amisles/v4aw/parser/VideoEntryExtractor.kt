@@ -5,6 +5,8 @@ import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.amisles.v4aw.model.VideoEntry
 import java.net.URL
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -68,13 +70,7 @@ class VideoEntryExtractor @Inject constructor() {
         }
 
         if (patternMatched.size >= VideoParserConstants.MIN_GROUP_SIZE_FOR_HEURISTIC) {
-            val sortedEntries = patternMatched.distinctBy { it.url }
-                .sortedWith(
-                    compareByDescending<VideoEntry> { it.thumbnailUrl != null }
-                        .thenByDescending { !it.title.startsWith("http") }
-                        .thenByDescending { it.title.length > 10 }
-                )
-            return sortedEntries.take(VideoParserConstants.MAX_VIDEO_ENTRIES)
+            return sortAndLimitVideoEntries(patternMatched)
         }
 
         val heuristicEntries = discoverPatternsHeuristically(doc, baseUrl, urlPattern)
@@ -85,14 +81,17 @@ class VideoEntryExtractor @Inject constructor() {
             }
         }
 
-        val sortedEntries = entries.distinctBy { it.url }
+        return sortAndLimitVideoEntries(entries)
+    }
+
+    private fun sortAndLimitVideoEntries(entries: List<VideoEntry>): List<VideoEntry> {
+        return entries.distinctBy { it.url }
             .sortedWith(
                 compareByDescending<VideoEntry> { it.thumbnailUrl != null }
                     .thenByDescending { !it.title.startsWith("http") }
                     .thenByDescending { it.title.length > 10 }
             )
-
-        return sortedEntries.take(VideoParserConstants.MAX_VIDEO_ENTRIES)
+            .take(VideoParserConstants.MAX_VIDEO_ENTRIES)
     }
 
     private fun discoverPatternsHeuristically(
@@ -248,8 +247,18 @@ class VideoEntryExtractor @Inject constructor() {
             if (urlParts.size > 1) {
                 urlParts[1].split("&").forEach { param ->
                     val keyValue = param.split("=")
-                    if (keyValue.size == 2) {
-                        queryParams[keyValue[0]] = keyValue[1]
+                    if (keyValue.size >= 1) {
+                        val key = keyValue[0]
+                        val value = if (keyValue.size > 1) {
+                            try {
+                                URLDecoder.decode(keyValue[1], StandardCharsets.UTF_8.name())
+                            } catch (e: Exception) {
+                                keyValue[1]
+                            }
+                        } else {
+                            ""
+                        }
+                        queryParams[key] = value
                     }
                 }
 

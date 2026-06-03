@@ -10,7 +10,7 @@ class VideoSourceExtractor @Inject constructor() {
     private val TAG = "VideoSourceExtractor"
 
     fun extractVideoSources(doc: Document, baseUrl: String?): Pair<List<String>, List<String>> {
-        val videoSources = mutableListOf<String>()
+        val videoSources = mutableSetOf<String>()
         val iframeUrls = mutableListOf<String>()
 
         doc.select(VideoParserConstants.VIDEO_TAG).forEach { video ->
@@ -27,16 +27,14 @@ class VideoSourceExtractor @Inject constructor() {
             embedSrc.takeIf { it.isNotEmpty() }?.let { videoSources.add(it) }
         }
 
-        doc.select("${VideoParserConstants.LINK_TAG}[${VideoParserConstants.REL_ATTR}=${VideoParserConstants.PRELOAD_VALUE}][${VideoParserConstants.AS_ATTR}=${VideoParserConstants.VIDEO_VALUE}]").forEach { link ->
+        doc.select("${VideoParserConstants.LINK_TAG}[${VideoParserConstants.REL_ATTR}='${VideoParserConstants.PRELOAD_VALUE}'][${VideoParserConstants.AS_ATTR}='${VideoParserConstants.VIDEO_VALUE}']").forEach { link ->
             val href = link.attr(VideoParserConstants.HREF_ATTR)
-            href.takeIf { it.isNotEmpty() && !videoSources.contains(it) }?.let { videoSources.add(it) }
+            href.takeIf { it.isNotEmpty() }?.let { videoSources.add(it) }
         }
 
-        val scriptUrls = mutableListOf<String>()
         doc.select(VideoParserConstants.SCRIPT_TAG).forEach { script ->
-            UrlUtils.extractUrlsFromScript(script.html()).forEach { scriptUrls.add(it) }
+            UrlUtils.extractUrlsFromScript(script.html()).forEach { videoSources.add(it) }
         }
-        videoSources.addAll(scriptUrls)
 
         val dataAttrSelectors = "[${VideoParserConstants.DATA_SRC_ATTR}], [${VideoParserConstants.DATA_URL_ATTR}], [${VideoParserConstants.DATA_VIDEO_ATTR}]"
         doc.select(dataAttrSelectors).forEach { element ->
@@ -50,9 +48,7 @@ class VideoSourceExtractor @Inject constructor() {
             iframeSrc.takeIf { it.isNotEmpty() }?.let { src ->
                 iframeUrls.add(src)
                 UrlUtils.extractVideoUrlFromIframe(src)?.let { videoUrl ->
-                    if (!videoSources.contains(videoUrl)) {
-                        videoSources.add(videoUrl)
-                    }
+                    videoSources.add(videoUrl)
                 }
             }
         }
@@ -62,6 +58,6 @@ class VideoSourceExtractor @Inject constructor() {
             Log.i(TAG, "  [$index] ${src.take(200)}")
         }
 
-        return Pair(videoSources, iframeUrls)
+        return Pair(videoSources.toList(), iframeUrls)
     }
 }

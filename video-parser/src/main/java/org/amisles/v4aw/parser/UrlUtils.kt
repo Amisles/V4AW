@@ -3,12 +3,16 @@ package org.amisles.v4aw.parser
 import android.util.Log
 import java.net.URL
 import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 object UrlUtils {
     private const val TAG = "UrlUtils"
 
     fun makeAbsoluteUrl(url: String, baseUrl: String?): String {
         if (url.startsWith("http://") || url.startsWith("https://")) return url
+        if (url.startsWith("//")) {
+            return "https:$url"
+        }
         baseUrl?.let {
             try {
                 return URL(URL(it), url).toString()
@@ -16,7 +20,7 @@ object UrlUtils {
                 Log.w(TAG, "makeAbsoluteUrl: failed to resolve $url against $it", e)
             }
         }
-        return if (url.startsWith("//")) "https:$url" else VideoParserConstants.EMPTY_STRING
+        return VideoParserConstants.EMPTY_STRING
     }
 
     fun isValidVideoPageLink(url: String, urlPattern: UrlPattern? = null): Boolean {
@@ -96,7 +100,11 @@ object UrlUtils {
                 val value = param.substringAfter(VideoParserConstants.EQUALS_SIGN, "")
 
                 if (videoParams.contains(key.lowercase()) && value.isNotEmpty()) {
-                    val decodedValue = URLDecoder.decode(value, VideoParserConstants.UTF_8)
+                    val decodedValue = try {
+                        URLDecoder.decode(value, StandardCharsets.UTF_8.name())
+                    } catch (e: Exception) {
+                        value
+                    }
                     if (validateVideoUrl(decodedValue)) {
                         return decodedValue
                     }

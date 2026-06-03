@@ -2,6 +2,7 @@ package org.amisles.v4aw.parser
 
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import org.jsoup.parser.Parser
 
 object HtmlUtils {
     data class ParsedPage(val doc: Document, val title: String)
@@ -75,6 +76,6 @@ object HtmlUtils {
             }
         }
 
-        return finalSb.toString()
+        return Parser.unescapeEntities(finalSb.toString(), false)
     }
 }

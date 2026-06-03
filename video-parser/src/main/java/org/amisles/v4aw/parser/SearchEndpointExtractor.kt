@@ -150,8 +150,6 @@ class SearchEndpointExtractor @Inject constructor() {
         endpoints: MutableList<SearchEndpoint>,
         seenKeys: MutableSet<String>
     ) {
-        if (endpoints.isNotEmpty()) return
-
         val searchPathKeywords = listOf("/search", "/s?", "/find", "/query", "/so")
         val baseUrlHost = try {
             baseUrl?.let { URL(it).host }
@@ -200,7 +198,6 @@ class SearchEndpointExtractor @Inject constructor() {
                         )
                     )
                 }
-                return
             } else {
                 val dedupeKey = "$absoluteUrl${VideoParserConstants.VERTICAL_BAR}"
                 if (seenKeys.add(dedupeKey)) {
@@ -214,7 +211,6 @@ class SearchEndpointExtractor @Inject constructor() {
                         )
                     )
                 }
-                return
             }
         }
     }
