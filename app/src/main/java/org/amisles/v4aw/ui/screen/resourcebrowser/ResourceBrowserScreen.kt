@@ -74,56 +74,55 @@ fun ResourceBrowserScreen(
         return
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = currentVideoInfo.title.ifEmpty { strings.resourceBrowser },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (!viewModel.navigateBack()) {
-                            onNavigateBack()
-                        }
-                    }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = strings.backToOriginal
-                        )
-                    }
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Custom Top Bar (without Scaffold to avoid status bar gap)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, start = 4.dp, end = 12.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = {
+                if (!viewModel.navigateBack()) {
+                    onNavigateBack()
                 }
+            }) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = strings.backToOriginal,
+                    tint = Slate800
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = currentVideoInfo.title.ifEmpty { strings.resourceBrowser },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = Slate800
             )
         }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            when {
-                uiState.isLoading -> {
-                    LoadingContent()
-                }
-                uiState.errorMessage != null && currentVideoInfo.videoEntries.isEmpty() -> {
-                    ErrorContent(
-                        errorMessage = uiState.errorMessage!!,
-                        onRetry = { viewModel.initialize(currentVideoInfo) }
-                    )
-                }
-                else -> {
-                    BrowseContent(
-                        uiState = uiState,
-                        onParseVideoEntry = { viewModel.parseVideoEntry(it) },
-                        onSearch = { endpoint, query -> viewModel.searchSite(endpoint, query) },
-                        onRestoreOriginalEntries = { viewModel.restoreOriginalEntries() }
-                    )
-                }
+
+        when {
+            uiState.isLoading -> {
+                LoadingContent()
+            }
+            uiState.errorMessage != null && currentVideoInfo.videoEntries.isEmpty() -> {
+                ErrorContent(
+                    errorMessage = uiState.errorMessage!!,
+                    onRetry = { viewModel.initialize(currentVideoInfo) }
+                )
+            }
+            else -> {
+                BrowseContent(
+                    uiState = uiState,
+                    onParseVideoEntry = { viewModel.parseVideoEntry(it) },
+                    onSearch = { endpoint, query -> viewModel.searchSite(endpoint, query) },
+                    onRestoreOriginalEntries = { viewModel.restoreOriginalEntries() }
+                )
             }
         }
     }
