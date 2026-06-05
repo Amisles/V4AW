@@ -6,7 +6,15 @@ enum class Language(val code: String, val displayName: String) {
 
     companion object {
         fun fromCode(code: String): Language {
-            return entries.find { it.code == code } ?: ZH
+            return entries.find { it.code == code } ?: EN
+        }
+
+        fun fromSystemLanguage(systemLanguageCode: String): Language {
+            val normalizedCode = systemLanguageCode.lowercase().take(2)
+            return when (normalizedCode) {
+                "zh" -> ZH
+                else -> EN
+            }
         }
     }
 }

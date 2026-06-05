@@ -209,7 +209,7 @@ interface StringProvider {
 class DefaultStringProvider(
     private val translations: Map<Language, Map<String, String>>,
     override val currentLanguage: Language,
-    private val fallbackLanguage: Language = Language.ZH
+    private val fallbackLanguage: Language = Language.EN
 ) : StringProvider {
 
     override fun get(key: String): String {
