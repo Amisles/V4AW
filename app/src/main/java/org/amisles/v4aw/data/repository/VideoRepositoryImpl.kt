@@ -7,9 +7,11 @@ import org.amisles.v4aw.parser.VideoParser
 import org.amisles.v4aw.webview.WebViewManager
 import org.amisles.v4aw.model.PageType
 import org.amisles.v4aw.model.SearchEndpoint
+import org.amisles.v4aw.model.SiteRule
 import org.amisles.v4aw.model.VideoInfo
 import org.amisles.v4aw.model.ParseResult
 import org.amisles.v4aw.domain.repository.VideoRepository
+import org.amisles.v4aw.domain.usecase.MatchSiteRuleUseCase
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,7 +23,8 @@ sealed class VideoRepositoryException(message: String, cause: Throwable? = null)
 @Singleton
 class VideoRepositoryImpl @Inject constructor(
     private val webViewManager: WebViewManager,
-    private val videoParser: VideoParser
+    private val videoParser: VideoParser,
+    private val matchSiteRuleUseCase: MatchSiteRuleUseCase
 ) : VideoRepository {
 
     companion object {
@@ -42,9 +45,40 @@ class VideoRepositoryImpl @Inject constructor(
         Log.i(TAG, "[FLOW] URL: $url")
 
         try {
+            // Match site rule
+            val matchedRule = matchSiteRuleUseCase(url)
+            if (matchedRule != null) {
+                Log.i(TAG, "[FLOW] Matched site rule: ${matchedRule.name} (pattern: ${matchedRule.urlPattern})")
+            }
+
+            // Apply WebView config from rule
+            matchedRule?.webViewConfig?.let { config ->
+                config.pageLoadDelay?.let { webViewManager.setPageLoadDelay(it) }
+                config.customUserAgent?.let { webViewManager.setUserAgent(it) }
+                if (config.disableAdBlock) {
+                    webViewManager.setAdBlockEnabled(false)
+                }
+            }
+
             val webStart = System.currentTimeMillis()
             webViewManager.loadUrlAndWait(url)
             val webElapsed = System.currentTimeMillis() - webStart
+
+            // Apply WebView post-load config from rule
+            matchedRule?.webViewConfig?.let { config ->
+                if (config.scrollBeforeExtract) {
+                    webViewManager.scrollPage(config.scrollCount)
+                }
+                config.clickBeforeExtract?.let { selector ->
+                    webViewManager.clickElement(selector)
+                }
+                config.injectJs?.let { js ->
+                    webViewManager.injectScript(js)
+                }
+            }
+
+            // Reset WebView config
+            webViewManager.resetConfig()
 
             val capturedUrls = webViewManager.capturedUrls.value
             val htmlContent = webViewManager.htmlContent.value
@@ -60,7 +94,7 @@ class VideoRepositoryImpl @Inject constructor(
             }
 
             val parseStart = System.currentTimeMillis()
-            val parseResult = tryParseHtml(htmlContent, url)
+            val parseResult = tryParseHtml(htmlContent, url, matchedRule)
             val parseElapsed = System.currentTimeMillis() - parseStart
 
             Log.i(TAG, "[FLOW] Parsing done in ${parseElapsed}ms")
@@ -172,7 +206,7 @@ class VideoRepositoryImpl @Inject constructor(
         }
     }
 
-    private suspend fun tryParseHtml(htmlContent: String?, url: String): VideoParser.ParseResult? {
+    private suspend fun tryParseHtml(htmlContent: String?, url: String, siteRule: SiteRule? = null): VideoParser.ParseResult? {
         if (htmlContent == null) {
             Log.w(TAG, "[tryParseHtml] HTML content is null")
             return null
@@ -180,7 +214,7 @@ class VideoRepositoryImpl @Inject constructor(
         
         return try {
             withContext(Dispatchers.IO) {
-                videoParser.parseAll(htmlContent, url)
+                videoParser.parseAll(htmlContent, url, siteRule)
             }
         } catch (e: Exception) {
             Log.e(TAG, "[tryParseHtml] Error parsing HTML: ${e.message}", e)

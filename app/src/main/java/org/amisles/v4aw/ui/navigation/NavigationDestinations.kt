@@ -9,4 +9,10 @@ sealed class Screen(val route: String) {
     data object LlmConfig : Screen("llm_config")
     data object About : Screen("about")
     data object Downloads : Screen("downloads")
+    data object SiteRules : Screen("site_rules")
+    data object SiteRuleEdit : Screen("site_rule_edit/{ruleId}") {
+        fun createRoute(ruleId: String = "new"): String {
+            return "site_rule_edit/$ruleId"
+        }
+    }
 }

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,6 +51,7 @@ fun ProfileScreen(
     onNavigateToLlmConfig: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToAbout: () -> Unit,
+    onNavigateToSiteRules: () -> Unit,
     onClearCache: () -> Unit,
     cacheSize: String = "0 MB",
     downloadPath: String = "",
@@ -314,6 +316,12 @@ fun ProfileScreen(
                         title = strings.languageSetting,
                         subtitle = currentLanguage.displayName,
                         onClick = { showLanguageDialog = true }
+                    )
+                    MenuDivider()
+                    MenuItemRow(
+                        icon = Icons.AutoMirrored.Filled.Rule,
+                        title = strings.siteRules,
+                        onClick = onNavigateToSiteRules
                     )
                     MenuDivider()
                     MenuItemRow(

@@ -3,6 +3,7 @@ package org.amisles.v4aw.parser
 import android.util.Log
 import org.amisles.v4aw.model.VideoEntry
 import org.amisles.v4aw.model.SearchEndpoint
+import org.amisles.v4aw.model.SiteRule
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -10,7 +11,8 @@ import javax.inject.Singleton
 class VideoParser @Inject constructor(
     private val videoSourceExtractor: VideoSourceExtractor,
     private val searchEndpointExtractor: SearchEndpointExtractor,
-    private val videoEntryExtractor: VideoEntryExtractor
+    private val videoEntryExtractor: VideoEntryExtractor,
+    private val ruleBasedExtractor: RuleBasedExtractor
 ) {
 
     companion object {
@@ -25,17 +27,36 @@ class VideoParser @Inject constructor(
         val searchEndpoints: List<SearchEndpoint> = emptyList()
     )
 
-    fun parseAll(html: String, baseUrl: String? = null): ParseResult {
+    fun parseAll(html: String, baseUrl: String? = null, siteRule: SiteRule? = null): ParseResult {
         return try {
             val decodedHtml = HtmlUtils.decodeHtml(html)
             val parsed = HtmlUtils.parseDocument(decodedHtml)
 
-            val (videoSources, iframeUrls) = videoSourceExtractor.extractVideoSources(parsed.doc, baseUrl)
-            val videoEntries = videoEntryExtractor.extractVideoEntries(parsed.doc, baseUrl)
-            val searchEndpoints = searchEndpointExtractor.extractSearchEndpoints(parsed.doc, baseUrl)
+            // Rule-based extraction
+            val ruleVideoSources = siteRule?.videoSourceRule?.let {
+                ruleBasedExtractor.extractVideoSources(parsed.doc, it, baseUrl)
+            } ?: emptyList()
 
-            Log.i(TAG, "[SCAN] Scanned video sources: ${videoSources.size}")
-            videoSources.forEachIndexed { i, src ->
+            val ruleVideoEntries = siteRule?.videoEntryRule?.let {
+                ruleBasedExtractor.extractVideoEntries(parsed.doc, it, baseUrl)
+            } ?: emptyList()
+
+            val ruleSearchEndpoints = siteRule?.searchEndpointRule?.let {
+                ruleBasedExtractor.extractSearchEndpoints(it, baseUrl)
+            } ?: emptyList()
+
+            // Generic extraction (fallback)
+            val (genericSources, iframeUrls) = videoSourceExtractor.extractVideoSources(parsed.doc, baseUrl)
+            val genericEntries = videoEntryExtractor.extractVideoEntries(parsed.doc, baseUrl)
+            val genericSearchEndpoints = searchEndpointExtractor.extractSearchEndpoints(parsed.doc, baseUrl)
+
+            // Merge: rule results first, then generic as supplement
+            val allSources = (ruleVideoSources + genericSources).distinct()
+            val allEntries = (ruleVideoEntries + genericEntries).distinctBy { it.url }
+            val allSearchEndpoints = (ruleSearchEndpoints + genericSearchEndpoints).distinctBy { it.actionUrl }
+
+            Log.i(TAG, "[SCAN] Scanned video sources: ${allSources.size} (rule: ${ruleVideoSources.size}, generic: ${genericSources.size})")
+            allSources.forEachIndexed { i, src ->
                 Log.i(TAG, "[SCAN-SRC-$i] ${src.take(200)}")
             }
             Log.i(TAG, "[SCAN] Scanned iframe URLs: ${iframeUrls.size}")
@@ -44,11 +65,11 @@ class VideoParser @Inject constructor(
             }
 
             ParseResult(
-                videoSources = videoSources,
-                videoEntries = videoEntries,
+                videoSources = allSources,
+                videoEntries = allEntries,
                 iframeUrls = iframeUrls,
                 title = parsed.title,
-                searchEndpoints = searchEndpoints
+                searchEndpoints = allSearchEndpoints
             )
         } catch (e: Exception) {
             Log.e(TAG, "parseAll: failed to parse HTML", e)

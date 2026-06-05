@@ -26,6 +26,10 @@ import org.amisles.v4aw.ui.screen.profile.ProfileViewModel
 import org.amisles.v4aw.ui.screen.resourcebrowser.ResourceBrowserScreen
 import org.amisles.v4aw.ui.screen.resourcebrowser.ResourceBrowserViewModel
 import org.amisles.v4aw.ui.screen.settings.SettingsViewModel
+import org.amisles.v4aw.ui.screen.siterules.SiteRulesScreen
+import org.amisles.v4aw.ui.screen.siterules.SiteRulesViewModel
+import org.amisles.v4aw.ui.screen.siterules.SiteRuleEditScreen
+import org.amisles.v4aw.ui.screen.siterules.SiteRuleEditViewModel
 import org.amisles.v4aw.ui.screen.urlinput.UrlInputScreen
 import org.amisles.v4aw.ui.screen.urlinput.UrlInputViewModel
 import org.amisles.v4aw.ui.screen.videoplayer.VideoPlayerScreen
@@ -132,6 +136,7 @@ fun NavGraph(
                     }
                 },
                 onNavigateToAbout = { navController.navigate(Screen.About.route) },
+                onNavigateToSiteRules = { navController.navigate(Screen.SiteRules.route) },
                 onClearCache = { profileViewModel.clearCache() },
                 cacheSize = uiState.cacheSize,
                 downloadPath = uiState.downloadPath,
@@ -169,6 +174,33 @@ fun NavGraph(
                     )
                     navController.navigateToPlayer(videoInfo)
                 }
+            )
+        }
+
+        composable(Screen.SiteRules.route) {
+            val viewModel: SiteRulesViewModel = hiltViewModel()
+            SiteRulesScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.navigateUp() },
+                onNavigateToAddRule = {
+                    navController.navigate(Screen.SiteRuleEdit.createRoute("new"))
+                },
+                onNavigateToEditRule = { ruleId ->
+                    navController.navigate(Screen.SiteRuleEdit.createRoute(ruleId))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.SiteRuleEdit.route,
+            arguments = listOf(
+                navArgument("ruleId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val viewModel: SiteRuleEditViewModel = hiltViewModel()
+            SiteRuleEditScreen(
+                viewModel = viewModel,
+                onNavigateBack = { navController.navigateUp() }
             )
         }
     }

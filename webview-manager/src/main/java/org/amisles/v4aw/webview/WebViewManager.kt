@@ -42,6 +42,11 @@ class WebViewManager @Inject constructor(
 
     private val isDestroyed = AtomicBoolean(false)
 
+    // Configurable parameters for site rules
+    private var customPageLoadDelay: Long? = null
+    private var customUserAgent: String? = null
+    private var adBlockEnabled: Boolean = true
+
     companion object {
         private const val TAG = "WebViewManager"
         private const val PAGE_LOAD_DELAY_MS = 1500L
@@ -159,6 +164,7 @@ class WebViewManager @Inject constructor(
                 savePassword = false
                 @Suppress("DEPRECATION")
                 saveFormData = false
+                customUserAgent?.let { userAgentString = it }
             }
 
             webViewClient = object : WebViewClient() {
@@ -168,7 +174,7 @@ class WebViewManager @Inject constructor(
                 ): WebResourceResponse? {
                     val url = request?.url?.toString() ?: return null
 
-                    if (isAdUrl(url)) {
+                    if (adBlockEnabled && isAdUrl(url)) {
                         return emptyResponse
                     }
 
@@ -544,6 +550,51 @@ class WebViewManager @Inject constructor(
             .replace("\"", "\\\"")
             .replace("'", "\\'")
             .replace("\n", "\\a")
+    }
+
+    fun setAdBlockEnabled(enabled: Boolean) {
+        adBlockEnabled = enabled
+    }
+
+    fun setPageLoadDelay(delay: Long) {
+        customPageLoadDelay = delay
+    }
+
+    fun setUserAgent(userAgent: String) {
+        customUserAgent = userAgent
+        webView?.settings?.userAgentString = userAgent
+    }
+
+    fun resetConfig() {
+        customPageLoadDelay = null
+        customUserAgent = null
+        adBlockEnabled = true
+    }
+
+    fun scrollPage(count: Int) {
+        scope.launch {
+            repeat(count) {
+                webView?.evaluateJavascript(
+                    "window.scrollBy(0, window.innerHeight);",
+                    null
+                )
+                delay(500)
+            }
+        }
+    }
+
+    fun clickElement(selector: String) {
+        scope.launch {
+            webView?.evaluateJavascript(
+                "document.querySelector('$selector')?.click();",
+                null
+            )
+            delay(1000)
+        }
+    }
+
+    fun injectScript(js: String) {
+        webView?.evaluateJavascript(js, null)
     }
 
     fun destroy() {
