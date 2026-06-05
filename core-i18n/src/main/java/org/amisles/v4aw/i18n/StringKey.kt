@@ -196,4 +196,7 @@ object StringKey {
     const val DOWNLOAD_FAILED_NOTIFICATION = "download_failed_notification"
     const val DOWNLOAD_CHANNEL_NAME = "download_channel_name"
     const val DOWNLOAD_CHANNEL_DESCRIPTION = "download_channel_description"
+
+    const val RESOURCE_BROWSER = "resource_browser"
+    const val NO_RESOURCES_FOUND = "no_resources_found"
 }

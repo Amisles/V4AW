@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.amisles.v4aw.model.PageType
 import org.amisles.v4aw.model.ParseResult
 import org.amisles.v4aw.model.VideoInfo
 import org.amisles.v4aw.i18n.LocalStrings
@@ -23,6 +24,7 @@ import org.amisles.v4aw.ui.theme.Slate800
 fun UrlInputScreen(
     viewModel: UrlInputViewModel,
     onNavigateToPlayer: (VideoInfo) -> Unit,
+    onNavigateToResourceBrowser: (VideoInfo) -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
@@ -36,7 +38,13 @@ fun UrlInputScreen(
             hasNavigated = true
             val result = uiState.parseResult as ParseResult.Success
             viewModel.resetParseResult()
-            onNavigateToPlayer(result.videoInfo)
+            when (result.videoInfo.pageType) {
+                PageType.PLAYABLE -> onNavigateToPlayer(result.videoInfo)
+                PageType.BROWSABLE -> onNavigateToResourceBrowser(result.videoInfo)
+                PageType.EMPTY -> {
+                    Toast.makeText(context, strings.noPlayableSource, Toast.LENGTH_LONG).show()
+                }
+            }
         } else if (uiState.parseResult is ParseResult.Error) {
             Toast.makeText(context, (uiState.parseResult as ParseResult.Error).message, Toast.LENGTH_LONG).show()
         }

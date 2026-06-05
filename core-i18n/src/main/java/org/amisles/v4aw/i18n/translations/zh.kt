@@ -197,4 +197,7 @@ val zhStrings: Map<String, String> = mapOf(
     "download_failed_notification" to "下载失败",
     "download_channel_name" to "下载通知",
     "download_channel_description" to "下载任务状态通知",
+
+    "resource_browser" to "资源浏览",
+    "no_resources_found" to "未找到可浏览的资源",
 )

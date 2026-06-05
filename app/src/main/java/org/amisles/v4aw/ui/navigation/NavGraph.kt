@@ -13,6 +13,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.amisles.v4aw.data.cache.ParseResultCache
 import org.amisles.v4aw.model.VideoInfo
 import org.amisles.v4aw.i18n.LanguageViewModel
 import org.amisles.v4aw.ui.screen.downloads.DownloadsScreen
@@ -22,6 +23,8 @@ import org.amisles.v4aw.ui.screen.profile.AboutScreen
 import org.amisles.v4aw.ui.screen.profile.LlmConfigScreen
 import org.amisles.v4aw.ui.screen.profile.ProfileScreen
 import org.amisles.v4aw.ui.screen.profile.ProfileViewModel
+import org.amisles.v4aw.ui.screen.resourcebrowser.ResourceBrowserScreen
+import org.amisles.v4aw.ui.screen.resourcebrowser.ResourceBrowserViewModel
 import org.amisles.v4aw.ui.screen.settings.SettingsViewModel
 import org.amisles.v4aw.ui.screen.urlinput.UrlInputScreen
 import org.amisles.v4aw.ui.screen.urlinput.UrlInputViewModel
@@ -34,6 +37,7 @@ import java.nio.charset.StandardCharsets
 @Composable
 fun NavGraph(
     navController: NavHostController,
+    parseResultCache: ParseResultCache,
     modifier: Modifier = Modifier
 ) {
     NavHost(
@@ -47,6 +51,9 @@ fun NavGraph(
                 viewModel = viewModel,
                 onNavigateToPlayer = { videoInfo ->
                     navController.navigateToPlayer(videoInfo)
+                },
+                onNavigateToResourceBrowser = { videoInfo ->
+                    navController.navigateToResourceBrowser(videoInfo, parseResultCache)
                 },
                 onNavigateToHistory = {
                     navController.navigate(Screen.History.route)
@@ -63,18 +70,37 @@ fun NavGraph(
                 navArgument("videoInfoJson") { type = NavType.StringType }
             )
         ) { backStackEntry ->
+            val viewModel: VideoPlayerViewModel = hiltViewModel()
             val encodedJson = backStackEntry.arguments?.getString("videoInfoJson") ?: ""
             val videoInfoJson = try {
                 URLDecoder.decode(encodedJson, StandardCharsets.UTF_8.name())
             } catch (e: Exception) {
                 encodedJson
             }
-            val videoInfo = Json.decodeFromString<VideoInfo>(videoInfoJson)
-            val viewModel: VideoPlayerViewModel = hiltViewModel()
+            val videoInfo = try {
+                Json.decodeFromString<VideoInfo>(videoInfoJson)
+            } catch (e: Exception) {
+                parseResultCache.consume() ?: VideoInfo()
+            }
             VideoPlayerScreen(
                 viewModel = viewModel,
                 videoInfo = videoInfo,
-                onNavigateBack = { navController.navigateUp() }
+                onNavigateBack = { navController.navigateUp() },
+                onNavigateToResourceBrowser = { info ->
+                    navController.navigateToResourceBrowser(info, parseResultCache)
+                }
+            )
+        }
+
+        composable(Screen.ResourceBrowser.route) {
+            val viewModel: ResourceBrowserViewModel = hiltViewModel()
+            ResourceBrowserScreen(
+                viewModel = viewModel,
+                videoInfo = null,
+                onNavigateBack = { navController.navigateUp() },
+                onNavigateToPlayer = { videoInfo ->
+                    navController.navigateToPlayer(videoInfo)
+                }
             )
         }
 
@@ -82,6 +108,9 @@ fun NavGraph(
             HistoryScreen(
                 onNavigateToPlayer = { videoInfo ->
                     navController.navigateToPlayer(videoInfo)
+                },
+                onNavigateToResourceBrowser = { videoInfo ->
+                    navController.navigateToResourceBrowser(videoInfo, parseResultCache)
                 }
             )
         }
@@ -149,4 +178,9 @@ fun NavHostController.navigateToPlayer(videoInfo: VideoInfo) {
     val videoInfoJson = Json.encodeToString(videoInfo)
     val encoded = URLEncoder.encode(videoInfoJson, StandardCharsets.UTF_8.name())
     navigate("${Screen.VideoPlayer.route}/$encoded")
+}
+
+fun NavHostController.navigateToResourceBrowser(videoInfo: VideoInfo, parseResultCache: ParseResultCache) {
+    parseResultCache.put(videoInfo)
+    navigate(Screen.ResourceBrowser.route)
 }

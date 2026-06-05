@@ -36,6 +36,7 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(
     onNavigateToPlayer: (VideoInfo) -> Unit,
+    onNavigateToResourceBrowser: (VideoInfo) -> Unit,
     viewModel: HistoryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()

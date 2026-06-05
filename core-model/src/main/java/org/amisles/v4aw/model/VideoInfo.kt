@@ -14,5 +14,6 @@ data class VideoInfo(
     val searchEndpoints: List<SearchEndpoint> = emptyList(),
     val thumbnailUrl: String? = null,
     val duration: Long? = null,
+    val pageType: PageType = PageType.PLAYABLE,
     val createdAt: Long = System.currentTimeMillis()
 )

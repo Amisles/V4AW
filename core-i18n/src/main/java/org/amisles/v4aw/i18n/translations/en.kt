@@ -197,4 +197,7 @@ val enStrings: Map<String, String> = mapOf(
     "download_failed_notification" to "Download Failed",
     "download_channel_name" to "Download Notifications",
     "download_channel_description" to "Notifications for download task status",
+
+    "resource_browser" to "Resource Browser",
+    "no_resources_found" to "No browsable resources found",
 )

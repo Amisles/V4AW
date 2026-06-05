@@ -19,7 +19,10 @@ class SearchEndpointExtractor @Inject constructor() {
         extractSearchForms(doc, baseUrl, endpoints, seenKeys)
         extractSearchInputs(doc, baseUrl, endpoints, seenKeys)
         extractSearchApisFromScripts(doc, baseUrl, endpoints, seenKeys)
-        extractSearchNavLinks(doc, baseUrl, endpoints, seenKeys)
+
+        if (endpoints.isEmpty()) {
+            extractSearchPageLinks(doc, baseUrl, endpoints, seenKeys)
+        }
 
         if (endpoints.isNotEmpty()) {
             Log.d(TAG, "extractSearchEndpoints: found ${endpoints.size} search endpoints from $baseUrl")
@@ -144,74 +147,101 @@ class SearchEndpointExtractor @Inject constructor() {
         }
     }
 
-    private fun extractSearchNavLinks(
+    /**
+     * Strategy 4: Find links/buttons that navigate to a search page.
+     * When no search form/input is found on the current page, look for
+     * search-related links (e.g. "Search" button, search icon) that point
+     * to a separate search page. The search page likely has a search form
+     * that can be discovered later via discoverSearchEndpoint().
+     */
+    private fun extractSearchPageLinks(
         doc: Document,
         baseUrl: String?,
         endpoints: MutableList<SearchEndpoint>,
         seenKeys: MutableSet<String>
     ) {
-        val searchPathKeywords = listOf("/search", "/s?", "/find", "/query", "/so")
         val baseUrlHost = try {
             baseUrl?.let { URL(it).host }
         } catch (_: Exception) {
             null
         }
 
-        for (link in doc.select("${VideoParserConstants.ANCHOR_TAG}[${VideoParserConstants.HREF_ATTR}]")) {
+        val searchLinkSelectors = listOf(
+            "a[href*=search]",
+            "a[href*=/s?]",
+            "a[href*=find]",
+            "a[href*=query]",
+            "a[class*=search]",
+            "a[id*=search]",
+            "a[aria-label*=search]",
+            "a[aria-label*=Search]",
+            "a[title*=search]",
+            "a[title*=Search]",
+            "button[onclick*=search]",
+            "[role=search] a"
+        )
+
+        val searchTextPatterns = listOf("search", "搜索", "查找", "搜", "找", "find", "query")
+
+        val candidateLinks = mutableListOf<Element>()
+
+        searchLinkSelectors.forEach { selector ->
+            doc.select(selector).forEach { link ->
+                if (!candidateLinks.contains(link)) {
+                    candidateLinks.add(link)
+                }
+            }
+        }
+
+        doc.select("a").forEach { link ->
+            val text = link.text().trim().lowercase()
+            val ariaLabel = link.attr("aria-label").lowercase()
+            val titleAttr = link.attr("title").lowercase()
+            val combined = "$text $ariaLabel $titleAttr"
+
+            if (searchTextPatterns.any { combined.contains(it) }) {
+                if (!candidateLinks.contains(link)) {
+                    candidateLinks.add(link)
+                }
+            }
+        }
+
+        for (link in candidateLinks) {
             val href = link.attr(VideoParserConstants.HREF_ATTR)
             if (href.isEmpty()) continue
+            if (href.startsWith(VideoParserConstants.HASH_PREFIX)) continue
+            if (href.startsWith(VideoParserConstants.JAVASCRIPT_PREFIX)) continue
+            if (href.startsWith(VideoParserConstants.MAILTO_PREFIX)) continue
 
             val absoluteUrl = UrlUtils.makeAbsoluteUrl(href, baseUrl)
             if (absoluteUrl.isEmpty()) continue
 
-            val pathContainsSearch = searchPathKeywords.any { absoluteUrl.contains(it, ignoreCase = true) }
-            if (!pathContainsSearch) continue
+            if (!absoluteUrl.startsWith("http://") && !absoluteUrl.startsWith("https://")) continue
 
-            val url = try {
-                URL(absoluteUrl)
+            val linkHost = try {
+                URL(absoluteUrl).host
             } catch (_: Exception) {
                 continue
             }
 
-            if (baseUrlHost != null && url.host != baseUrlHost) continue
+            if (baseUrlHost != null && linkHost != baseUrlHost) continue
 
-            val query = url.query ?: ""
+            if (absoluteUrl == baseUrl) continue
 
-            if (query.isNotEmpty()) {
-                val firstParamKey = query.split(VideoParserConstants.AMPERSAND)
-                    .firstOrNull()
-                    ?.substringBefore(VideoParserConstants.EQUALS_SIGN)
-                    ?.takeIf { it.isNotEmpty() && it !in VideoParserConstants.IGNORE_PARAMS }
-                    ?: continue
-
-                val actionUrl = "${url.protocol}://${url.authority}${url.path}"
-                val dedupeKey = "$actionUrl${VideoParserConstants.VERTICAL_BAR}$firstParamKey"
-
-                if (seenKeys.add(dedupeKey)) {
-                    Log.d(TAG, "extractSearchNavLinks: found search nav link with params")
-                    endpoints.add(
-                        SearchEndpoint(
-                            actionUrl = actionUrl,
-                            method = "GET",
-                            queryParam = firstParamKey,
-                            sourceUrl = baseUrl ?: ""
-                        )
+            val dedupeKey = "$absoluteUrl|"
+            if (seenKeys.add(dedupeKey)) {
+                Log.d(TAG, "extractSearchPageLinks: found search page link at $absoluteUrl")
+                endpoints.add(
+                    SearchEndpoint(
+                        actionUrl = absoluteUrl,
+                        method = "GET",
+                        queryParam = VideoParserConstants.EMPTY_STRING,
+                        sourceUrl = baseUrl ?: ""
                     )
-                }
-            } else {
-                val dedupeKey = "$absoluteUrl${VideoParserConstants.VERTICAL_BAR}"
-                if (seenKeys.add(dedupeKey)) {
-                    Log.d(TAG, "extractSearchNavLinks: found search page link")
-                    endpoints.add(
-                        SearchEndpoint(
-                            actionUrl = absoluteUrl,
-                            method = "GET",
-                            queryParam = VideoParserConstants.EMPTY_STRING,
-                            sourceUrl = baseUrl ?: ""
-                        )
-                    )
-                }
+                )
             }
+
+            if (endpoints.size >= 3) break
         }
     }
 

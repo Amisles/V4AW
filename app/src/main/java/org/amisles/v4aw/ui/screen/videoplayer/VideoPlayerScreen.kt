@@ -24,7 +24,8 @@ import org.amisles.v4aw.ui.screen.videoplayer.utils.exitFullscreen
 fun VideoPlayerScreen(
     viewModel: VideoPlayerViewModel,
     videoInfo: VideoInfo,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToResourceBrowser: (VideoInfo) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val downloadsViewModel: DownloadsViewModel = hiltViewModel()
@@ -71,6 +72,13 @@ fun VideoPlayerScreen(
         }
     }
 
+    LaunchedEffect(uiState.navigateToResourceBrowser) {
+        uiState.navigateToResourceBrowser?.let { info ->
+            onNavigateToResourceBrowser(info)
+            viewModel.clearNavigateToResourceBrowser()
+        }
+    }
+
     when {
         uiState.isInPictureInPicture && uiState.player != null -> {
             PipPlayerView(
@@ -111,7 +119,8 @@ fun VideoPlayerScreen(
                         if (pv.isControllerFullyVisible) pv.hideController() else pv.showController()
                     }
                 },
-                onRestoreOriginalEntries = { viewModel.restoreOriginalEntries() }
+                onRestoreOriginalEntries = { viewModel.restoreOriginalEntries() },
+                onNavigateToResourceBrowser = onNavigateToResourceBrowser
             )
         }
     }

@@ -200,6 +200,9 @@ interface StringProvider {
     val downloadChannelName get() = get(StringKey.DOWNLOAD_CHANNEL_NAME)
     val downloadChannelDescription get() = get(StringKey.DOWNLOAD_CHANNEL_DESCRIPTION)
 
+    val resourceBrowser get() = get(StringKey.RESOURCE_BROWSER)
+    val noResourcesFound get() = get(StringKey.NO_RESOURCES_FOUND)
+
     fun s(key: String): String = get(key)
 }
 

@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.amisles.v4aw.data.cache.ParseResultCache
+import org.amisles.v4aw.model.PageType
 import org.amisles.v4aw.model.VideoEntry
 import org.amisles.v4aw.model.SearchEndpoint
 import org.amisles.v4aw.model.VideoInfo
@@ -44,7 +46,8 @@ data class VideoPlayerUiState(
     val searchErrorMessage: String? = null,
     val originalVideoEntries: List<VideoEntry> = emptyList(),
     val originalSearchEndpoints: List<SearchEndpoint> = emptyList(),
-    val isSearchResultMode: Boolean = false
+    val isSearchResultMode: Boolean = false,
+    val navigateToResourceBrowser: VideoInfo? = null
 )
 
 @UnstableApi
@@ -55,7 +58,8 @@ class VideoPlayerViewModel @Inject constructor(
     private val parseVideoUrlUseCase: ParseVideoUrlUseCase,
     private val searchUseCase: SearchUseCase,
     private val pipManager: PictureInPictureManager,
-    private val videoPlayer: VideoPlayer
+    private val videoPlayer: VideoPlayer,
+    private val parseResultCache: ParseResultCache
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(VideoPlayerUiState())
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.asStateFlow()
@@ -105,8 +109,39 @@ class VideoPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             videoPlayer.stopCurrentPlayback()
             _uiState.value = _uiState.value.copy(player = null)
-            parseAndPlayVideo(videoEntry.url, videoEntry.title)
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+
+            val result = parseVideoUrlUseCase(videoEntry.url)
+
+            if (result is ParseResult.Success) {
+                val info = result.videoInfo
+                if (info.pageType == PageType.BROWSABLE) {
+                    parseResultCache.put(info)
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        navigateToResourceBrowser = info
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        videoInfo = info,
+                        isLoading = false,
+                        isSearchResultMode = false,
+                        originalVideoEntries = info.videoEntries,
+                        originalSearchEndpoints = info.searchEndpoints
+                    )
+                    playVideoFromInfo(info)
+                }
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = (result as? ParseResult.Error)?.message ?: Strings.current.errorParseFailed
+                )
+            }
         }
+    }
+
+    fun clearNavigateToResourceBrowser() {
+        _uiState.value = _uiState.value.copy(navigateToResourceBrowser = null)
     }
 
     private suspend fun parseAndPlayVideo(url: String, title: String) {
@@ -309,6 +344,10 @@ class VideoPlayerViewModel @Inject constructor(
             abLoopB = null,
             isAbLoopActive = false
         )
+    }
+
+    fun consumeCachedVideoInfo(): VideoInfo? {
+        return parseResultCache.consume()
     }
 
     override fun onCleared() {

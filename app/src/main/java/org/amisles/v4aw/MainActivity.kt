@@ -1,6 +1,5 @@
 package org.amisles.v4aw
 
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,12 +10,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
+import org.amisles.v4aw.data.cache.ParseResultCache
 import org.amisles.v4aw.i18n.LanguageProvider
 import org.amisles.v4aw.ui.MainScreen
 import org.amisles.v4aw.ui.theme.V4awTheme
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    
+    @Inject
+    lateinit var parseResultCache: ParseResultCache
     
     private var pipModeChangedListener: ((Boolean) -> Unit)? = null
     
@@ -39,7 +43,10 @@ class MainActivity : ComponentActivity() {
                         color = MaterialTheme.colorScheme.background
                     ) {
                         val navController = rememberNavController()
-                        MainScreen(navController = navController)
+                        MainScreen(
+                            navController = navController,
+                            parseResultCache = parseResultCache
+                        )
                     }
                 }
             }

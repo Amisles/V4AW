@@ -52,7 +52,8 @@ internal fun NormalPlayerView(
     onShowAbLoopDialog: () -> Unit,
     onPlayerViewCreated: (PlayerView) -> Unit,
     onTap: () -> Unit,
-    onRestoreOriginalEntries: () -> Unit
+    onRestoreOriginalEntries: () -> Unit,
+    onNavigateToResourceBrowser: (VideoInfo) -> Unit
 ) {
     val strings = LocalStrings.current
     val isLocalVideo = videoInfo.videoSources.any { it.startsWith("file://") } ||
@@ -107,7 +108,8 @@ internal fun NormalPlayerView(
                     onPlayerViewCreated = { pv ->
                         localPlayerViewRef = pv
                         onPlayerViewCreated(pv)
-                    }
+                    },
+                    onNavigateToResourceBrowser = onNavigateToResourceBrowser
                 )
             }
             uiState.errorMessage != null -> {
@@ -226,7 +228,8 @@ private fun ColumnScope.PlayerContent(
     onShowSpeedDialog: () -> Unit,
     onTap: () -> Unit,
     onRestoreOriginalEntries: () -> Unit,
-    onPlayerViewCreated: (PlayerView) -> Unit
+    onPlayerViewCreated: (PlayerView) -> Unit,
+    onNavigateToResourceBrowser: (VideoInfo) -> Unit
 ) {
     val strings = LocalStrings.current
     val currentVideoInfo = uiState.videoInfo ?: videoInfo

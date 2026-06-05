@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.amisles.v4aw.parser.VideoParser
 import org.amisles.v4aw.webview.WebViewManager
+import org.amisles.v4aw.model.PageType
 import org.amisles.v4aw.model.SearchEndpoint
 import org.amisles.v4aw.model.VideoInfo
 import org.amisles.v4aw.model.ParseResult
@@ -90,13 +91,30 @@ class VideoRepositoryImpl @Inject constructor(
 
             val jsoupSources = parseResult?.videoSources ?: emptyList()
             val videoEntries = parseResult?.videoEntries ?: emptyList()
-            val searchEndpoints = parseResult?.searchEndpoints ?: emptyList()
+            var searchEndpoints = parseResult?.searchEndpoints ?: emptyList()
             val allSources = capturedUrls + jsoupSources
 
             if (searchEndpoints.isNotEmpty()) {
                 Log.i(TAG, "[FLOW] Discovered ${searchEndpoints.size} search endpoint(s) from: $url")
                 searchEndpoints.forEachIndexed { i, ep ->
                     Log.i(TAG, "[FLOW-SEARCH-$i] method=${ep.method}, action=${ep.actionUrl}, queryParam=${ep.queryParam}")
+                }
+            }
+
+            val undiscoveredEndpoints = searchEndpoints.filter { it.queryParam.isEmpty() }
+            if (undiscoveredEndpoints.isNotEmpty()) {
+                Log.i(TAG, "[FLOW] Preloading ${undiscoveredEndpoints.size} search page(s) to discover endpoints")
+                val resolvedEndpoints = mutableListOf<SearchEndpoint>()
+                for (undiscovered in undiscoveredEndpoints) {
+                    val discovered = discoverSearchEndpoint(undiscovered.actionUrl)
+                    if (discovered != null) {
+                        resolvedEndpoints.add(discovered)
+                    }
+                }
+                if (resolvedEndpoints.isNotEmpty()) {
+                    val knownEndpoints = searchEndpoints.filter { it.queryParam.isNotEmpty() }
+                    searchEndpoints = knownEndpoints + resolvedEndpoints
+                    Log.i(TAG, "[FLOW] Preload resolved ${resolvedEndpoints.size} endpoint(s)")
                 }
             }
 
@@ -126,13 +144,19 @@ class VideoRepositoryImpl @Inject constructor(
             Log.i(TAG, PARSE_END_MARKER)
 
             return if (validSources.isNotEmpty() || videoEntries.isNotEmpty() || searchEndpoints.isNotEmpty()) {
+                val pageType = when {
+                    validSources.isNotEmpty() -> PageType.PLAYABLE
+                    videoEntries.isNotEmpty() -> PageType.BROWSABLE
+                    else -> PageType.EMPTY
+                }
                 ParseResult.Success(
                     VideoInfo(
                         title = title,
                         url = url,
                         videoSources = validSources.distinct(),
                         videoEntries = videoEntries.distinctBy { it.url },
-                        searchEndpoints = searchEndpoints
+                        searchEndpoints = searchEndpoints,
+                        pageType = pageType
                     ),
                     videoEntries = videoEntries.distinctBy { it.url },
                     searchEndpoints = searchEndpoints
@@ -185,13 +209,19 @@ class VideoRepositoryImpl @Inject constructor(
             val title = parseResult?.title ?: DEFAULT_VIDEO_TITLE
 
             if (validSources.isNotEmpty() || videoEntries.isNotEmpty() || searchEndpoints.isNotEmpty()) {
+                val pageType = when {
+                    validSources.isNotEmpty() -> PageType.PLAYABLE
+                    videoEntries.isNotEmpty() -> PageType.BROWSABLE
+                    else -> PageType.EMPTY
+                }
                 ParseResult.Success(
                     VideoInfo(
                         title = title,
                         url = currentUrl,
                         videoSources = validSources.distinct(),
                         videoEntries = videoEntries.distinctBy { it.url },
-                        searchEndpoints = searchEndpoints
+                        searchEndpoints = searchEndpoints,
+                        pageType = pageType
                     ),
                     videoEntries = videoEntries.distinctBy { it.url },
                     searchEndpoints = searchEndpoints
