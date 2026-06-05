@@ -20,20 +20,24 @@ class SearchEndpointExtractor @Inject constructor() {
         extractSearchInputs(doc, baseUrl, endpoints, seenKeys)
         extractSearchApisFromScripts(doc, baseUrl, endpoints, seenKeys)
 
+        // Only try search page links if no endpoints found from forms/inputs/scripts
         if (endpoints.isEmpty()) {
             extractSearchPageLinks(doc, baseUrl, endpoints, seenKeys)
         }
 
-        if (endpoints.isNotEmpty()) {
-            Log.d(TAG, "extractSearchEndpoints: found ${endpoints.size} search endpoints from $baseUrl")
-            endpoints.forEachIndexed { index, ep ->
+        // Limit to at most 2 endpoints to avoid cluttering the UI
+        val result = endpoints.take(2)
+
+        if (result.isNotEmpty()) {
+            Log.d(TAG, "extractSearchEndpoints: found ${result.size} search endpoints from $baseUrl")
+            result.forEachIndexed { index, ep ->
                 Log.d(TAG, "  [$index] method=${ep.method}, action=${ep.actionUrl}, queryParam=${ep.queryParam}")
             }
         } else {
             Log.d(TAG, "extractSearchEndpoints: no search endpoints found from $baseUrl")
         }
 
-        return endpoints
+        return result
     }
 
     private fun extractSearchForms(
@@ -166,22 +170,16 @@ class SearchEndpointExtractor @Inject constructor() {
             null
         }
 
+        // Stricter selectors: only match links that clearly point to a search page
         val searchLinkSelectors = listOf(
             "a[href*=search]",
             "a[href*=/s?]",
-            "a[href*=find]",
-            "a[href*=query]",
             "a[class*=search]",
             "a[id*=search]",
-            "a[aria-label*=search]",
-            "a[aria-label*=Search]",
-            "a[title*=search]",
-            "a[title*=Search]",
-            "button[onclick*=search]",
             "[role=search] a"
         )
 
-        val searchTextPatterns = listOf("search", "搜索", "查找", "搜", "找", "find", "query")
+        val searchTextPatterns = listOf("search", "搜索", "查找", "find")
 
         val candidateLinks = mutableListOf<Element>()
 
@@ -199,7 +197,8 @@ class SearchEndpointExtractor @Inject constructor() {
             val titleAttr = link.attr("title").lowercase()
             val combined = "$text $ariaLabel $titleAttr"
 
-            if (searchTextPatterns.any { combined.contains(it) }) {
+            // Only match if the text is short and clearly a search label
+            if (searchTextPatterns.any { combined.contains(it) } && combined.length < 30) {
                 if (!candidateLinks.contains(link)) {
                     candidateLinks.add(link)
                 }
@@ -228,6 +227,11 @@ class SearchEndpointExtractor @Inject constructor() {
 
             if (absoluteUrl == baseUrl) continue
 
+            // Skip URLs that look like individual content pages (e.g. /short/0Rz3GrIblus)
+            val path = try { URL(absoluteUrl).path } catch (_: Exception) { "" }
+            if (path.count { it == '/' } > 2) continue
+            if (path.matches(Regex(".*/[a-zA-Z0-9]{6,}.*"))) continue
+
             val dedupeKey = "$absoluteUrl|"
             if (seenKeys.add(dedupeKey)) {
                 Log.d(TAG, "extractSearchPageLinks: found search page link at $absoluteUrl")
@@ -241,7 +245,7 @@ class SearchEndpointExtractor @Inject constructor() {
                 )
             }
 
-            if (endpoints.size >= 3) break
+            if (endpoints.size >= 2) break
         }
     }
 
