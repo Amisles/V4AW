@@ -13,14 +13,16 @@ A modern Android application that extracts and plays videos from websites withou
 
 - 🌐 **WebView-based Content Extraction** - Bypasses anti-bot mechanisms by using a real WebView
 - 🎬 **Automatic Video Source Detection** - Finds video tags, iframes, and network-captured sources
-- 🚫 **Ad Blocking** - Network-level ad blocking using request interception
+- � **Browse Mode** - Use resource preview as video website app, browse and search websites
+- 🔧 **Custom Parse Rules** - Configure custom parsing rules for specific websites
+- � **Ad Blocking** - Network-level ad blocking using request interception
 - 📝 **LLM Integration** - Optional DeepSeek/Tencent Hunyuan analysis for better video detection
 - 💾 **History Tracking** - Auto-saves browsing history for quick re-access
 - 📥 **Video Downloader** - Supports downloading videos for offline viewing
 - 🎨 **Modern UI** - Material Design 3 with Jetpack Compose
 - 📱 **Clean Architecture** - MVVM with Clean Architecture principles
 - 🔄 **Multiple Video Formats** - Supports HLS (.m3u8), DASH (.mpd), MP4, WebM, and more
-- 🌍 **Internationalization** - Built-in i18n support with English and Chinese translations
+- 🌍 **Internationalization** - Built-in i18n support with English and Chinese translations, auto-detects system language
 
 ---
 
@@ -121,6 +123,22 @@ V4AW follows **Clean Architecture** with **Modular Design** and clear separation
    - Tap History in the bottom navigation
    - Quick re-analyze previous videos
 
+### Browse Mode
+
+1. **Enter Website Home Page**
+   - On the main screen, enter a video website home page URL
+   - Example: `https://example.com`
+
+2. **Browse and Search**
+   - Use the built-in browser to navigate the website
+   - Tap search endpoints to search for videos
+   - Tap video thumbnails to play videos
+
+3. **Manage Custom Parse Rules**
+   - Go to Profile → Site Rules
+   - Add/edit/delete custom parsing rules for specific websites
+   - Configure video source extraction, video entry extraction, search endpoint extraction, and WebView behavior
+
 ---
 
 ## 📦 Project Structure
@@ -136,6 +154,12 @@ V4AW/
 │   │   │   │   └── AppModule.kt    # Hilt dependency injection module
 │   │   │   ├── llm/
 │   │   │   │   └── LlmClient.kt    # LLM API client (DeepSeek, Hunyuan)
+│   │   │   ├── local/              # Local data sources
+│   │   │   │   ├── dao/
+│   │   │   │   │   └── SiteRuleDao.kt  # Site rules DAO
+│   │   │   │   └── database/
+│   │   │   │       ├── AppDatabase.kt  # Room database
+│   │   │   │       └── SiteRuleConverters.kt  # Type converters
 │   │   │   ├── repository/
 │   │   │   │   ├── HistoryRepositoryImpl.kt
 │   │   │   │   └── VideoRepositoryImpl.kt
@@ -146,11 +170,14 @@ V4AW/
 │   │   │   └── usecase/
 │   │   │       ├── GetVideoSourceUseCase.kt
 │   │   │       ├── HistoryUseCase.kt
+│   │   │       ├── MatchSiteRuleUseCase.kt  # Match site rules
 │   │   │       └── ParseVideoUrlUseCase.kt
 │   │   ├── i18n/                   # Internationalization support
 │   │   └── ui/                     # UI layer (Jetpack Compose)
 │   │       ├── components/
 │   │       ├── navigation/
+│   │       ├── screen/
+│   │       │   └── siterules/      # Site rules management screens
 │   │       └── theme/
 │   └── build.gradle.kts
 │
@@ -160,6 +187,7 @@ V4AW/
 │       ├── HistoryItem.kt
 │       ├── LlmConfig.kt
 │       ├── ParseResult.kt
+│       ├── SiteRule.kt            # Custom site parsing rules
 │       ├── VideoEntry.kt
 │       └── VideoInfo.kt
 │
@@ -175,6 +203,8 @@ V4AW/
 │
 ├── video-parser/                   # Video parsing library module
 │   └── src/main/java/org/amisles/v4aw/parser/
+│       ├── RuleBasedExtractor.kt  # Rule-based extraction engine
+│       ├── SearchEndpointExtractor.kt  # Search endpoint extraction
 │       └── VideoParser.kt
 │
 ├── webview-manager/                # WebView management library module
@@ -227,12 +257,14 @@ Shared domain models and data entities:
 - `ParseResult` - Video parsing result wrapper
 - `DownloadInfo` - Download state info
 - `LlmConfig` - LLM configuration
+- `SiteRule` - Custom site parsing rules for video sources, video entries, and search endpoints
 
 #### core-i18n
 Internationalization support:
 - Multi-language support (English, Chinese)
 - Type-safe string resources
 - Runtime language switching
+- Auto-detects system language on first launch
 - Easy to extend with new languages
 
 ### Library Modules
@@ -243,6 +275,7 @@ Manages a hidden WebView instance that:
 - Intercepts network requests to block ads
 - Captures video URLs from network traffic
 - Injects JavaScript to extract HTML content
+- Configurable behavior via custom rules (delay, user agent, ad blocking, scrolling, clicking, script injection)
 
 #### VideoParser (`video-parser` module)
 Uses Jsoup to parse HTML and extract:
@@ -250,6 +283,8 @@ Uses Jsoup to parse HTML and extract:
 - `<iframe>` embeds
 - JavaScript-embedded video URLs
 - Validates and prioritizes video sources
+- Rule-based extraction engine for custom site rules
+- Search endpoint extraction
 
 #### VideoPlayer (`video-player` module)
 Core video playback library that:
